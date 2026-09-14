@@ -1,0 +1,50 @@
+{
+  "name": "timepick",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/copy-public.mjs && node scripts/copy-webroot.mjs",
+    "check:undef": "node scripts/check-undef.mjs",
+    "copy-room3d": "node scripts/copy-room3d.mjs",
+    "patch-room3d": "node scripts/patch-room3d-splash.mjs",
+    "precompress": "node scripts/precompress-static.mjs dist webroot",
+    "preview": "vite preview",
+    "start": "node server/index.js",
+    "server": "node server/index.js",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "pet:frames": "node scripts/pet-frames-gen.mjs",
+    "title:extract": "node scripts/extract-title.mjs",
+    "data:stat": "node scripts/data-sync.mjs stat",
+    "data:backup": "node scripts/data-sync.mjs backup",
+    "data:checkpoint": "node scripts/data-sync.mjs checkpoint",
+    "data:pull": "node scripts/data-sync.mjs pull",
+    "data:merge": "node scripts/data-sync.mjs merge",
+    "data:push": "node scripts/data-sync.mjs push",
+    "format": "oxfmt src/",
+    "admin:grant": "node scripts/make-admin.mjs"
+  },
+  "dependencies": {
+    "@tencent-ai/workbuddy-cloud-sdk": "^0.1.4-dev.ca27990.202610161713",
+    "express": "^5.2.1",
+    "node-sqlite3-wasm": "^0.8.60",
+    "pinia": "^4.0.2",
+    "vue": "^3.5.40",
+    "vue-router": "^5.2.0"
+  },
+  "//optionalDependencies": "原生模块(需要 node-gyp 编译)。放这里是刻意的: 部署沙箱编译不了 / 拉不到 Node headers, optional 依赖装失败 npm 只警告不中断, 运行时由 server/db-driver.js 自动落到 node-sqlite3-wasm(WASM 版 SQLite), sharp 也有 try/catch 兜底。",
+  "optionalDependencies": {
+    "better-sqlite3": "^13.0.3",
+    "sharp": "^0.34.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.8",
+    "oxfmt": "^0.59.0",
+    "vite": "^8.1.5",
+    "vite-plugin-vue-devtools": "^8.1.5"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  }
+}

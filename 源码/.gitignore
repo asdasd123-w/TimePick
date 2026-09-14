@@ -1,0 +1,62 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+.DS_Store
+dist
+dist-ssr
+# 部署用的 dist 副本(见 scripts/copy-webroot.mjs)
+# 带数字后缀的是 webroot 被锁住写不进去时的降级目标
+webroot
+webroot2
+webroot3
+webroot4
+webroot5
+
+coverage
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+*.tsbuildinfo
+
+.eslintcache
+
+# Cypress
+/cypress/videos/
+/cypress/screenshots/
+
+# Vitest
+__screenshots__/
+
+# Vite
+*.timestamp-*-*.mjs
+
+# 自建后端 SQLite 数据文件
+server/data/
+
+# 调试临时产物: 验证脚本的输出重定向文件 / 无头浏览器 profile(跑完就该删, 别进库)
+/.tmp-edge-*/
+/zz-*.txt
+
+# 本地密钥与环境变量(不要提交)
+.env
+.env.local
+server/data/secret.key
+
+# WorkBuddy 项目数据目录(记忆/截图/db 导出等), 不进版本库、不参与打包
+.workbuddy/

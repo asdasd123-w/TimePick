@@ -1,0 +1,49 @@
+# 依赖与构建产物
+node_modules/
+dist/
+dist-ssr/
+webroot/
+webroot2/
+webroot3/
+webroot4/
+webroot5/
+
+# Cocos 编辑器缓存与中间产物（打开工程会自动重建）
+library/
+temp/
+build/
+profiles/v2/packages/*/local/
+.creator/
+
+# 本地数据：SQLite 库、上传的媒体、密钥
+server/data/
+.env
+.env.local
+.env.*.local
+*.db
+*.sqlite
+*.sqlite3
+
+# 打包产物与临时文件
+*.zip
+*.rar
+*.7z
+*.log
+*.bak
+*.tmp
+.tmp-edge-*/
+# 提交包的说明文件，属于交付物而非源码
+00-提交前必读.txt
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.sw?
+*.tsbuildinfo
+
+# WorkBuddy 项目数据（不属于作品代码）
+.workbuddy/

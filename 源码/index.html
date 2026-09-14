@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="">
+  <head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="alternate icon" href="/favicon.svg">
+    <!-- viewport-fit=cover: 让页面铺到刘海/圆角屏边缘, 具体留白交给 env(safe-area-inset-*)
+         (见 App.vue / index.vue 的手机断点)。不加 maximum-scale —— 双指缩放要留着,
+         按钮的误触双击缩放改用 touch-action: manipulation 单独关掉。 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>拾光 TimePick</title>
+    <!-- ★ 首屏背景在 HTML 里就发起下载（原来是在 main.js 里插 <link rel=preload>，
+         那要等 JS 解析执行完才开始拉图，白等一个来回）。
+         图放在 public/bg/ 下、文件名不带 hash，所以这里能写死路径。
+         imagesrcset/sizes 与 welcome.vue 里的 srcset 保持一致，避免下载两张。 -->
+    <link
+      rel="preload"
+      as="image"
+      href="/bg/welcome.webp"
+      imagesrcset="/bg/welcome-sm.webp 1000w, /bg/welcome.webp 1672w"
+      imagesizes="100vw"
+      fetchpriority="high"
+    />
+    <!-- 启动占位：微信扫码回来时换票要等云端几个来回，而 Vue 还没挂载，
+         这段时间 #app 是空的 —— 用户看到一片白屏，很容易以为「扫码失败」又去扫一遍。
+         先放一个极轻量骨架，app.mount() 会把它整个替换掉。 -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #fbf6ef;
+      }
+      .boot-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        color: #a08d78;
+        user-select: none;
+      }
+      .boot-splash .boot-logo {
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: 8px;
+        color: #e0705a;
+        font-family: 'Songti SC', 'STSong', 'SimSun', serif;
+      }
+      .boot-splash .boot-line {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        letter-spacing: 1px;
+      }
+      .boot-splash .boot-line em {
+        font-style: normal;
+        margin-left: 3px;
+      }
+      .boot-splash .boot-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #e8a08e;
+        animation: boot-breathe 1.15s ease-in-out infinite;
+      }
+      .boot-splash .boot-dot:nth-child(2) {
+        animation-delay: 0.16s;
+      }
+      .boot-splash .boot-dot:nth-child(3) {
+        animation-delay: 0.32s;
+      }
+      @keyframes boot-breathe {
+        0%,
+        100% {
+          opacity: 0.25;
+          transform: scale(0.82);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="boot-splash">
+        <span class="boot-logo">拾光</span>
+        <span class="boot-line">
+          <i class="boot-dot"></i><i class="boot-dot"></i><i class="boot-dot"></i>
+          <em>正在载入你的时光…</em>
+        </span>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

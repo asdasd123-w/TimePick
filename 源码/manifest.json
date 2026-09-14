@@ -1,0 +1,12 @@
+{
+  "name": "TimePick",
+  "appid": "__UNI__A7831DC",
+  "description": "拾光 - 记录生活，遇见同频的人",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "uniStatistics": {
+    "enable": false
+  },
+  "vueVersion": "3"
+}
