@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+
+  <title>Cocos Creator | sg3d</title>
+
+  <!--http://www.html5rocks.com/en/mobile/mobifying/-->
+  <meta name="viewport"
+        content="width=device-width,user-scalable=no,initial-scale=1,minimum-scale=1,maximum-scale=1,minimal-ui=true"/>
+
+  <!--https://developer.apple.com/library/safari/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html-->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
+
+  <!-- force webkit on 360 -->
+  <meta name="renderer" content="webkit"/>
+  <meta name="force-rendering" content="webkit"/>
+  <!-- force edge on IE -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+  <meta name="msapplication-tap-highlight" content="no">
+
+  <!-- force full screen on some browser -->
+  <meta name="full-screen" content="yes"/>
+  <meta name="x5-fullscreen" content="true"/>
+  <meta name="360-fullscreen" content="true"/>
+
+  <!--fix fireball/issues/3568 -->
+  <!--<meta name="browsermode" content="application">-->
+  <meta name="x5-page-mode" content="app">
+
+  <!--<link rel="apple-touch-icon" href=".png" />-->
+  <!--<link rel="apple-touch-icon-precomposed" href=".png" />-->
+
+  <link rel="stylesheet" type="text/css" href="style.css"/>
+
+  <script>
+  /* 3D 房间的渲染分辨率：按**总像素预算**封顶，而不是写死一个 devicePixelRatio。
+     房间/家具/底座小岛都是 5 万面级别的模型，画面几乎全是"像素开销"。
+     同一台机器（Intel UHD）实测：1920x1080 画布 62fps、2400x1350 42fps、2880x1620 31fps
+     —— 像素数和帧率基本成反比。只封顶 dpr 不够：2560x1440 上 dpr 1.5 仍是 576 万像素。
+
+     这里按 MAX_PIXELS 反推 dpr：1080p 屏幕刚好 1.0（原生，不糊），
+     1440p / 4K 自动降一点，整块画布控制在 ~260 万像素以内。getter 里现算，窗口变了也跟着变。
+
+     ★ 想更清晰：MAX_PIXELS 调大（2600000 → 4000000）；想更流畅：调小。
+     ★ 临时试某个倍率：地址后面加 ?dpr=1.25（只影响这次，不用重新构建）。*/
+  (function () {
+    var MAX_PIXELS = 2600000; /*TP_PIXEL_BUDGET*/
+    var MIN_DPR = 0.7;
+    var real = window.devicePixelRatio || 1;
+    var forced = (function () {
+      var m = /[?&]dpr=([0-9.]+)/.exec(location.search || '');
+      var v = m ? parseFloat(m[1]) : 0;
+      return v > 0 ? v : 0;
+    })();
+    function cap() {
+      if (forced) return forced;
+      var w = window.innerWidth || 1280;
+      var h = window.innerHeight || 720;
+      var budget = Math.sqrt(MAX_PIXELS / Math.max(1, w * h));
+      return Math.max(MIN_DPR, Math.min(real, budget));
+    }
+    try {
+      Object.defineProperty(window, 'devicePixelRatio', {
+        get: cap,
+        configurable: true
+      });
+    } catch (e) {
+      /* 极少数浏览器不允许覆盖, 那就保持原样, 不影响运行 */
+    }
+  })();
+  </script>
+</head>
+<body>
+  <div id="GameDiv" cc_exact_fit_screen="true">
+      <div id="Cocos3dGameContainer">
+        <canvas id="GameCanvas" oncontextmenu="event.preventDefault()" tabindex="99"></canvas>
+      </div>
+    </div>
+  
+
+<!-- Polyfills bundle. -->
+
+<script src="src/polyfills.bundle.js" charset="utf-8"> </script>
+
+
+<!-- SystemJS support. -->
+<script src="src/system.bundle.js" charset="utf-8"> </script>
+
+<!-- Import map -->
+<script src="src/import-map.json" type="systemjs-importmap" charset="utf-8"> </script>
+
+<script>
+    System.import('./index.js').catch(function(err) { console.error(err); })
+</script>
+<!-- ★ 只做进度上报，不再画加载画面。
+     加载页统一由宿主（src/components/room3d.vue）那一层负责（小猫跑酷 + 进度条）：
+     以前这里还有一套"拾光 + 进度条"的浅色页面，用户会先看到它、再看到宿主的页面，
+     看起来像两个加载页（2026-10-21 用户反馈）。现在这里只留一个隐藏节点做标记，
+     真实下载字节通过 postMessage 报给父页面，进度条因此是真实进度。 -->
+<!--TP_LOADER_START 由 scripts/inject-room3d-loader.mjs 生成，会被整块替换，别手改-->
+<!-- ★ 只做进度上报，不再画加载画面。
+     加载页统一由宿主（src/components/room3d.vue）那一层负责（小猫跑酷 + 进度条）：
+     以前这里还有一套"拾光 + 进度条"的浅色页面，用户会先看到它、再看到宿主的页面，
+     看起来像两个加载页（2026-10-21 用户反馈）。现在这里只留一个隐藏节点做标记，
+     真实下载字节通过 postMessage 报给父页面，进度条因此是真实进度。 -->
+<div id="tp-room-loader" hidden></div>
+<script>
+(function () {
+  // 预计总量：按产物体积 × 传输比估的固定值（每次注入时重算，不会留旧值）。
+  // ★ 不再拿 localStorage 里"上次实测"当分母 —— Cocos 的部分请求不写进 Resource Timing，
+  //   实测值会明显偏小，用它当分母会让进度条一开局就冲到 90%+（线上实测踩过）。
+  var EST = 34057906;
+  var done = false
+  function finish() {
+    if (done) return
+    done = true
+    // 加载画面由宿主负责，这里只需要停止上报
+    clearInterval(iv)
+  }
+  // ① 主信号：房间通过 HostBridge 向宿主 post tp:ready，这里拦一次
+  try {
+    var P = (window.parent && window.parent !== window) ? window.parent : window
+    var raw = P.postMessage ? P.postMessage.bind(P) : null
+    if (raw) {
+      P.postMessage = function () {
+        try { var m = arguments[0]; if (m && m.type === 'tp:ready') finish() } catch (e) {}
+        return raw.apply(null, arguments)
+      }
+    }
+  } catch (e) {}
+  // ② 兜底：240s 后无论如何停止上报（线上弱网首开实测要 100s+，60s 太短会中途断报）
+  setTimeout(finish, 240000)
+  // ★ 另外拦一层 XMLHttpRequest：Resource Timing 只记「已经下完」的请求，
+  //   3D 的大文件往往一个就十几 MB，传输途中数字会卡住不动。拦截 send 拿
+  //   progress 事件里的 loaded 字节，就能把「正在传的那部分」也报出去。
+  var live = {}          // url -> 已收字节（含已下完的）
+  var settled = {}       // url -> 已经下完（不重复计入 liveSum）
+  var liveSum = 0        // 只统计「此刻仍在传」的部分
+  var recomputeLive = function () {
+    var t = 0
+    for (var k in live) if (!settled[k]) t += live[k]
+    liveSum = t
+  }
+  try {
+    var XP = XMLHttpRequest.prototype
+    var rawOpen = XP.open
+    var rawSend = XP.send
+    XP.open = function (m, u) {
+      try { this.__tpUrl = String(u) } catch (e) {}
+      return rawOpen.apply(this, arguments)
+    }
+    XP.send = function () {
+      var xhr = this
+      try {
+        var u = xhr.__tpUrl || ''
+        // ★ 这里不能用 '/room3d/' 之类的前缀过滤: 引擎请求的是相对地址
+        //   (assets/resources/native/xx/uuid), 没有前缀会全部漏掉。
+        //   3D 页面里除了 /api 的接口调用, 其余请求都是房间资源, 全部计入。
+        if (u.indexOf('/api') < 0 && u.indexOf('apiBase') < 0) {
+          xhr.addEventListener('progress', function (e) {
+            // 不要求 lengthComputable: 分块传输/压缩响应常常没有 Content-Length,
+            // 但 e.loaded 依然是已收字节数, 正好用来推动进度条
+            if (e && e.loaded > (live[u] || 0)) { live[u] = e.loaded; recomputeLive() }
+          })
+          xhr.addEventListener('load', function () {
+            var n = 0
+            try { n = xhr.response ? (xhr.response.byteLength || xhr.response.length || 0) : 0 } catch (e) {}
+            if (n > (live[u] || 0)) live[u] = n
+            settled[u] = 1
+            recomputeLive()
+          })
+          xhr.addEventListener('error', function () { settled[u] = 1; recomputeLive() })
+          xhr.addEventListener('abort', function () { settled[u] = 1; recomputeLive() })
+        }
+      } catch (e) {}
+      return rawSend.apply(this, arguments)
+    }
+  } catch (e) {}
+
+  var painted = 0
+  // ★ 按 URL 累加，而不是每轮重新求和一次：
+  //   performance 的资源时间线是有上限的环形缓冲（引擎/浏览器都可能清理），
+  //   直接求和会让"已下载字节数"忽多忽少、甚至长期偏小，进度条就卡住了。
+  var seen = {}
+  var sum = 0
+  var iv = setInterval(function () {
+    try {
+      var es = performance.getEntriesByType('resource') || []
+      for (var i = 0; i < es.length; i++) {
+        var n = es[i].name || ''
+        if (n.indexOf('/room3d/') < 0 && n.indexOf('/assets/') < 0 && n.indexOf('/cocos-js/') < 0) continue
+        if (seen[n]) continue
+        var sz = es[i].transferSize || es[i].encodedBodySize || 0
+        if (sz <= 0) continue // 还在传输/跨域读不到长度，下一轮再看
+        seen[n] = sz
+        sum += sz
+      }
+    } catch (e) {}
+    // bytes=已下完（传输字节），live=此刻还在传的（解码后字节）。宿主两个加起来用，
+    // 否则"大文件正在传"的那几十秒里 bytes 完全不动，看起来就像卡死了。
+    try { (window.parent && window.parent !== window ? window.parent : window).postMessage({ type: 'tp:progress', bytes: sum, live: liveSum, est: EST }, '*') } catch (e) {}
+    var cv = document.querySelector('canvas')
+    if (cv && cv.width > 100 && cv.height > 100) {
+      painted++
+      // 只用来判断"画布已经画出来了"，不再回写 localStorage 当分母
+      if (painted === 12) painted = 13
+    }
+    if (done) clearInterval(iv)
+  }, 250)
+})()
+</script>
+<!--TP_LOADER_END-->
+
+</body>
+</html>
