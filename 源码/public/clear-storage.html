@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Clear LocalStorage</title>
+</head>
+<body>
+  <h1>清除 LocalStorage 数据</h1>
+  <p>正在清除...</p>
+  <script>
+    // 清除所有 localStorage
+    localStorage.clear()
+    console.log('✅ LocalStorage 已清空')
+    
+    // 显示当前状态
+    const keys = Object.keys(localStorage)
+    if (keys.length === 0) {
+      document.body.innerHTML = '<h1>✅ 清除成功！</h1><p>LocalStorage 已完全清空</p><p>请关闭此页面并刷新主页面（Ctrl+F5）</p>'
+    } else {
+      document.body.innerHTML = '<h1>❌ 清除失败</h1><p>剩余数据：</p><pre>' + JSON.stringify(keys, null, 2) + '</pre>'
+    }
+  </script>
+</body>
+</html>
