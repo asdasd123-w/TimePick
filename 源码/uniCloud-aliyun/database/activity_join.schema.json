@@ -1,0 +1,11 @@
+{
+  "bsonType": "object",
+  "required": ["activity_id", "user_id"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "参与记录ID" },
+    "activity_id": { "bsonType": "string", "title": "活动ID" },
+    "user_id": { "bsonType": "string", "title": "用户ID" },
+    "created_at": { "bsonType": "timestamp", "title": "创建时间" }
+  }
+}

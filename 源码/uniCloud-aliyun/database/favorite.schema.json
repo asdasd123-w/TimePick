@@ -1,0 +1,12 @@
+{
+  "bsonType": "object",
+  "required": ["user_id", "target_type", "target_id"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "收藏ID" },
+    "user_id": { "bsonType": "string", "title": "用户ID", "foreignKey": "user._id" },
+    "target_type": { "bsonType": "int", "title": "目标类型: 1记忆 2帖子 3空间", "enum": [1, 2, 3] },
+    "target_id": { "bsonType": "string", "title": "目标ID(多态, 指向对应集合_id)" },
+    "created_at": { "bsonType": "timestamp", "title": "收藏时间" }
+  }
+}

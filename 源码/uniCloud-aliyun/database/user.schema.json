@@ -1,0 +1,17 @@
+{
+  "bsonType": "object",
+  "required": ["username", "password"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "用户ID" },
+    "username": { "bsonType": "string", "title": "用户名", "trim": "both", "maxLength": 50 },
+    "password": { "bsonType": "string", "title": "密码(加密存储)", "maxLength": 255 },
+    "nickname": { "bsonType": "string", "title": "昵称", "maxLength": 50, "defaultValue": "" },
+    "avatar": { "bsonType": "string", "title": "头像URL", "maxLength": 500, "defaultValue": "" },
+    "email": { "bsonType": "string", "title": "邮箱", "maxLength": 100 },
+    "role": { "bsonType": "int", "title": "角色: 0普通 1管理员", "enum": [0, 1], "defaultValue": 0 },
+    "status": { "bsonType": "int", "title": "状态: 0禁用 1正常", "enum": [0, 1], "defaultValue": 1 },
+    "created_at": { "bsonType": "timestamp", "title": "创建时间" },
+    "updated_at": { "bsonType": "timestamp", "title": "更新时间" }
+  }
+}

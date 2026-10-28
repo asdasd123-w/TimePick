@@ -1,0 +1,18 @@
+{
+  "bsonType": "object",
+  "required": ["user_id", "content"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "帖子ID" },
+    "user_id": { "bsonType": "string", "title": "发帖用户ID", "foreignKey": "user._id" },
+    "space_id": { "bsonType": "string", "title": "关联记忆空间ID(可空)", "foreignKey": "memory_space._id" },
+    "content": { "bsonType": "string", "title": "帖子正文" },
+    "images": { "bsonType": "string", "title": "图片URL列表(逗号分隔)", "defaultValue": "" },
+    "tags": { "bsonType": "string", "title": "标签(逗号分隔)", "defaultValue": "" },
+    "likes_count": { "bsonType": "int", "title": "点赞数", "defaultValue": 0 },
+    "comments_count": { "bsonType": "int", "title": "评论数", "defaultValue": 0 },
+    "is_public": { "bsonType": "int", "title": "是否公开: 0仅自己 1公开", "enum": [0, 1], "defaultValue": 1 },
+    "created_at": { "bsonType": "timestamp", "title": "发帖时间" },
+    "updated_at": { "bsonType": "timestamp", "title": "更新时间" }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "bsonType": "object",
+  "required": ["follower_id", "following_id"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "关注关系ID" },
+    "follower_id": { "bsonType": "string", "title": "关注者ID", "foreignKey": "user._id" },
+    "following_id": { "bsonType": "string", "title": "被关注者ID", "foreignKey": "user._id" },
+    "created_at": { "bsonType": "timestamp", "title": "关注时间" }
+  }
+}

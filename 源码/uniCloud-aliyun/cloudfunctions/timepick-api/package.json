@@ -1,0 +1,7 @@
+{
+  "name": "timepick-api",
+  "version": "1.0.0",
+  "description": "TimePick 统一 API 云函数(URL 化)",
+  "main": "index.js",
+  "dependencies": {}
+}

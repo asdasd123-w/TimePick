@@ -1,0 +1,15 @@
+{
+  "bsonType": "object",
+  "required": ["post_id", "user_id", "content"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "评论ID" },
+    "post_id": { "bsonType": "string", "title": "帖子ID", "foreignKey": "square_post._id" },
+    "user_id": { "bsonType": "string", "title": "评论用户ID", "foreignKey": "user._id" },
+    "parent_id": { "bsonType": "string", "title": "父评论ID(可空, 楼中楼)", "foreignKey": "post_comment._id" },
+    "content": { "bsonType": "string", "title": "评论内容", "trim": "both", "maxLength": 500 },
+    "likes_count": { "bsonType": "int", "title": "点赞数", "defaultValue": 0 },
+    "created_at": { "bsonType": "timestamp", "title": "评论时间" },
+    "updated_at": { "bsonType": "timestamp", "title": "更新时间" }
+  }
+}

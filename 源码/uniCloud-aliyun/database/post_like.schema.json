@@ -1,0 +1,11 @@
+{
+  "bsonType": "object",
+  "required": ["post_id", "user_id"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "点赞ID" },
+    "post_id": { "bsonType": "string", "title": "帖子ID", "foreignKey": "square_post._id" },
+    "user_id": { "bsonType": "string", "title": "点赞用户ID", "foreignKey": "user._id" },
+    "created_at": { "bsonType": "timestamp", "title": "点赞时间" }
+  }
+}

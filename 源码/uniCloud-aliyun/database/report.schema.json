@@ -1,0 +1,16 @@
+{
+  "bsonType": "object",
+  "required": ["reporter_id", "target_type", "target_id", "reason"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "举报ID" },
+    "reporter_id": { "bsonType": "string", "title": "举报人ID", "foreignKey": "user._id" },
+    "target_type": { "bsonType": "int", "title": "举报目标: 1帖子 2评论 3用户", "enum": [1, 2, 3] },
+    "target_id": { "bsonType": "string", "title": "举报目标ID" },
+    "reason": { "bsonType": "string", "title": "举报原因", "maxLength": 500 },
+    "status": { "bsonType": "int", "title": "状态: 0待处理 1已处理 2已驳回", "enum": [0, 1, 2], "defaultValue": 0 },
+    "handle_note": { "bsonType": "string", "title": "处理备注", "defaultValue": "" },
+    "created_at": { "bsonType": "timestamp", "title": "举报时间" },
+    "updated_at": { "bsonType": "timestamp", "title": "处理时间" }
+  }
+}

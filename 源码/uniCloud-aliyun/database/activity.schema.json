@@ -1,0 +1,17 @@
+{
+  "bsonType": "object",
+  "required": ["title", "content"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "活动ID" },
+    "title": { "bsonType": "string", "title": "活动标题", "maxLength": 100 },
+    "content": { "bsonType": "string", "title": "活动详情" },
+    "cover": { "bsonType": "string", "title": "封面图URL", "defaultValue": "" },
+    "type": { "bsonType": "int", "title": "类型: 1公告 2活动 3更新", "enum": [1, 2, 3], "defaultValue": 1 },
+    "is_public": { "bsonType": "int", "title": "是否公开: 0隐藏 1公开", "enum": [0, 1], "defaultValue": 1 },
+    "is_major": { "bsonType": "int", "title": "是否大型活动: 0否 1是", "enum": [0, 1], "defaultValue": 0 },
+    "sort": { "bsonType": "int", "title": "排序权重(越大越前)", "defaultValue": 0 },
+    "created_at": { "bsonType": "timestamp", "title": "创建时间" },
+    "updated_at": { "bsonType": "timestamp", "title": "更新时间" }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "bsonType": "object",
+  "required": ["user_id"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "宠物配置ID" },
+    "user_id": { "bsonType": "string", "title": "所属用户ID", "foreignKey": "user._id" },
+    "pet_type": { "bsonType": "string", "title": "宠物类型", "maxLength": 50, "defaultValue": "" },
+    "pet_name": { "bsonType": "string", "title": "宠物昵称", "maxLength": 50, "defaultValue": "" },
+    "level": { "bsonType": "int", "title": "等级", "defaultValue": 1 },
+    "exp": { "bsonType": "int", "title": "经验值", "defaultValue": 0 },
+    "mood": { "bsonType": "number", "title": "心情值(0-100)", "defaultValue": 80 },
+    "outfit": { "bsonType": "string", "title": "当前装扮", "maxLength": 100, "defaultValue": "" },
+    "accessories": { "bsonType": "string", "title": "配饰列表(逗号分隔)", "defaultValue": "" },
+    "last_interact": { "bsonType": "timestamp", "title": "最后互动时间" },
+    "created_at": { "bsonType": "timestamp", "title": "创建时间" },
+    "updated_at": { "bsonType": "timestamp", "title": "更新时间" }
+  }
+}

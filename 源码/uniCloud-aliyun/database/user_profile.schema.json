@@ -1,0 +1,17 @@
+{
+  "bsonType": "object",
+  "required": ["user_id"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "资料ID" },
+    "user_id": { "bsonType": "string", "title": "用户ID", "foreignKey": "user._id" },
+    "gender": { "bsonType": "int", "title": "性别: 0未知 1男 2女", "enum": [0, 1, 2], "defaultValue": 0 },
+    "birthday": { "bsonType": "timestamp", "title": "生日" },
+    "bio": { "bsonType": "string", "title": "个人简介", "maxLength": 500, "defaultValue": "" },
+    "hobbies": { "bsonType": "string", "title": "爱好(逗号分隔)", "defaultValue": "" },
+    "occupation": { "bsonType": "string", "title": "职业", "maxLength": 50, "defaultValue": "" },
+    "location": { "bsonType": "string", "title": "所在地", "maxLength": 100, "defaultValue": "" },
+    "created_at": { "bsonType": "timestamp", "title": "创建时间" },
+    "updated_at": { "bsonType": "timestamp", "title": "更新时间" }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "bsonType": "object",
+  "required": ["space_id", "title"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "记忆条目ID" },
+    "space_id": { "bsonType": "string", "title": "所属空间ID", "foreignKey": "memory_space._id" },
+    "title": { "bsonType": "string", "title": "标题", "trim": "both", "maxLength": 200 },
+    "content": { "bsonType": "string", "title": "正文内容", "defaultValue": "" },
+    "mood": { "bsonType": "string", "title": "心情标签", "maxLength": 50, "defaultValue": "" },
+    "weather": { "bsonType": "string", "title": "天气标签", "maxLength": 20, "defaultValue": "" },
+    "tags": { "bsonType": "string", "title": "标签(逗号分隔)", "defaultValue": "" },
+    "is_public": { "bsonType": "int", "title": "是否公开(0私有/1公开)", "defaultValue": 0 },
+    "kind": { "bsonType": "string", "title": "种类(memory/book/music)", "defaultValue": "memory", "enum": ["memory", "book", "music"] },
+    "author": { "bsonType": "string", "title": "作者/音乐人", "defaultValue": "" },
+    "entry_date": { "bsonType": "string", "title": "条目日期", "defaultValue": "" },
+    "type": { "bsonType": "string", "title": "类型(旅游/工作/学习/其他)", "defaultValue": "其他" },
+    "position_x": { "bsonType": "number", "title": "空间内X坐标", "defaultValue": 0 },
+    "position_y": { "bsonType": "number", "title": "空间内Y坐标", "defaultValue": 0 },
+    "rotation": { "bsonType": "number", "title": "旋转角度", "defaultValue": 0 },
+    "ai_cover": { "bsonType": "string", "title": "AI封面图(dataURL)", "defaultValue": "" },
+    "created_at": { "bsonType": "timestamp", "title": "创建时间" },
+    "updated_at": { "bsonType": "timestamp", "title": "更新时间" }
+  }
+}

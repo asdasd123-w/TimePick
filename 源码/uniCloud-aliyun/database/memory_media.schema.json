@@ -1,0 +1,15 @@
+{
+  "bsonType": "object",
+  "required": ["memory_id", "type", "url"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "description": "媒体ID" },
+    "memory_id": { "bsonType": "string", "title": "所属记忆条目ID", "foreignKey": "memory_item._id" },
+    "type": { "bsonType": "int", "title": "类型: 1图片 2音频 3视频", "enum": [1, 2, 3] },
+    "url": { "bsonType": "string", "title": "资源URL" },
+    "thumb": { "bsonType": "string", "title": "缩略图URL", "defaultValue": "" },
+    "duration": { "bsonType": "int", "title": "时长(秒)", "defaultValue": 0 },
+    "sort": { "bsonType": "int", "title": "排序权重", "defaultValue": 0 },
+    "created_at": { "bsonType": "timestamp", "title": "创建时间" }
+  }
+}
