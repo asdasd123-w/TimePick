@@ -88,25 +88,21 @@ npm ci
 
 ### 2. 配置环境
 
-在 `源码/` 目录下创建 `.env.local`：
+源码根目录已附带 **`.env.example`**（逐项注释，只有占位符、不含任何真实密钥）。复制一份再改成自己的值：
 
-```dotenv
-PORT=8787
-VITE_CLOUD_API_BASE=http://localhost:8787/api
-DB_DRIVER=node:sqlite
-
-# 替换为自行生成的长随机字符串
-JWT_SECRET=replace-with-a-long-random-secret
-# 注册时需要输入的口令
-REGISTER_PASSPHRASE=优乐美
-# 替换为自己的注册手机号，需要另行授权管理员
-SUPER_ADMIN_USERNAME=replace-with-your-phone
-
-# AI 服务按需配置；留空可先体验基础功能
-DEEPSEEK_API_KEY=
-ZHIPU_API_KEY=
-DASHSCOPE_API_KEY=
+```bash
+cp .env.example .env.local        # Windows: copy .env.example .env.local
 ```
+
+其中三项必须改：
+
+| 变量 | 说明 |
+| --- | --- |
+| `JWT_SECRET` | 登录令牌签名密钥，随便一串 32 位以上随机字符 |
+| `SUPER_ADMIN_USERNAME` | 超级管理员的**注册手机号**。代码里不再提供默认值，不填则管理员授权、AI 密钥等超管功能不可用（启动日志会给出提示） |
+| `REGISTER_PASSPHRASE` | 注册口令，注册新账号时要输入 |
+
+`DEEPSEEK_API_KEY`、`ZHIPU_API_KEY`、`DASHSCOPE_API_KEY` 留空也能启动，只是对应的 AI 功能关闭。
 
 可通过以下命令生成随机密钥：
 
@@ -170,6 +166,7 @@ node --env-file=.env.local server/index.js
 | `server/schema.sql` | 基础表结构 |
 | `server/db-driver.js` | SQLite 驱动适配 |
 | `scripts/` | 构建、检查、授权与数据维护脚本 |
+| `.env.example` | 环境变量模板，复制为 `.env.local` 后填值 |
 | `vite.config.js` | 前端开发与构建配置 |
 
 运行数据位于 `server/data/`，默认数据库为 `server/data/timepick.db`。部署更新时应保留数据目录，备份时同时保存数据库、关联媒体及必要的加密密钥。

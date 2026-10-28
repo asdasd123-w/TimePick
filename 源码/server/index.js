@@ -7,6 +7,8 @@ import path from 'node:path'
 import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
+// 环境变量必须在任何模块读取 process.env 之前就位（见 load-env.js 里的说明）
+import './load-env.js'
 import db from './db.js'
 // 3D 房间摆件模块（sg3d 打通）：记忆 -> 房间家具摆放方案
 import {
@@ -33,36 +35,13 @@ import { attestedCloudUid, ensureWechatUser, resolveCloudUid } from './wechat-au
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// ---------------- 环境变量加载 ----------------
-// 不引入 dotenv 依赖: 依次读取 .env.local / .env, 已存在的环境变量优先(便于容器注入)
-function loadEnvFiles() {
-  for (const name of ['.env.local', '.env']) {
-    const file = path.join(__dirname, '..', name)
-    if (!fs.existsSync(file)) continue
-    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
-      const s = line.trim()
-      if (!s || s.startsWith('#')) continue
-      const eq = s.indexOf('=')
-      if (eq <= 0) continue
-      const key = s.slice(0, eq).trim()
-      let val = s.slice(eq + 1).trim()
-      if (
-        (val.startsWith('"') && val.endsWith('"')) ||
-        (val.startsWith("'") && val.endsWith("'"))
-      ) {
-        val = val.slice(1, -1)
-      }
-      if (process.env[key] === undefined) process.env[key] = val
-    }
-  }
-}
-loadEnvFiles()
-
 const PORT = Number(process.env.PORT) || 8787
 // 注册口令: 只有输入正确口令才能注册(可用环境变量 REGISTER_PASSPHRASE 覆盖)
 const REGISTER_PASSPHRASE = process.env.REGISTER_PASSPHRASE || '优乐美'
 // 超级管理员用户名(即管理员手机号): 只有它可以设置/取消其他管理员
-const SUPER_ADMIN = process.env.SUPER_ADMIN_USERNAME || '18801314366'
+// ★ 必须由环境变量 SUPER_ADMIN_USERNAME 提供, 不要在这里写死手机号 ——
+//   源码是公开的, 写死等于把管理员账号一起公开。模板见项目根目录 .env.example。
+const SUPER_ADMIN = (process.env.SUPER_ADMIN_USERNAME || '').trim()
 // 陪伴宠物可选花色(白名单)。必须与前端 src/stores/companion.js 的 PET_SHEETS 保持一致,
 // 否则前端会因为拿不到对应精灵图而渲染失败。
 const PET_TYPES = ['橘猫', '三花猫', '虎斑猫', '黑白猫', '白猫']
@@ -3898,6 +3877,14 @@ app.use((req, res, next) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[timepick-api] listening on http://0.0.0.0:${PORT}/api`)
   console.log(webRoot ? `[timepick-web] serving ${webRoot}` : '[timepick-web] 未找到前端产物, 仅提供 API')
+  // 超管手机号不再写死在代码里，必须由环境变量提供，否则所有超管专属操作都会静默失效，
+  // 排查起来很难（表现为「点了没反应」而不是报错），所以在启动时就明确提示一次。
+  if (!SUPER_ADMIN) {
+    console.warn(
+      '[timepick-api] ⚠ 未设置 SUPER_ADMIN_USERNAME：管理员授权、AI 密钥等超管功能将不可用。\n' +
+        '              解决办法：cp .env.example .env.local，把 SUPER_ADMIN_USERNAME 填成你的注册手机号。',
+    )
+  }
   // 存量房间摆件修复：旧版本按「内容分类」挑家具，同一分类会清一色变成书包；
   // 再往后摆位又改成了黄金角螺旋 + 朝向随机轮转（柜子背面朝人、家具全挤在房间正中）。
   // 这里按当前规则整间重排：家具名 + 坐标 + 朝向，全部走「槽位表 + 正面朝中心」。

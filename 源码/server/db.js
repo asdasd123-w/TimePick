@@ -1,5 +1,7 @@
 // SQLite 数据库初始化: 打开 server/data/timepick.db 并执行建表脚本
 // 驱动选择见 server/db-driver.js
+// ★ load-env 必须第一个导入: 下面 DB_PATH / SUPER_ADMIN_USERNAME 都来自环境变量
+import './load-env.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -56,8 +58,10 @@ if (!roomPropCols.includes('support')) {
 }
 // 一次性迁移: 把旧库里的管理员账号「优乐美」统一成手机号 SUPER_ADMIN_USERNAME
 // (部署时线上 server/data 不会被覆盖, 只能靠启动时迁移同步; 只改用户名+管理员标记, 不动密码与其它数据)
-const SUPER_ADMIN_USERNAME = process.env.SUPER_ADMIN_USERNAME || '18801314366'
+// ★ 这个手机号同样只能来自环境变量: 为空时必须跳过迁移, 否则旧账号会被改名成空字符串。
+const SUPER_ADMIN_USERNAME = (process.env.SUPER_ADMIN_USERNAME || '').trim()
 try {
+  if (!SUPER_ADMIN_USERNAME) throw new Error('未设置 SUPER_ADMIN_USERNAME, 无从迁移')
   const taken = db.prepare('SELECT id FROM user WHERE username = ?').get(SUPER_ADMIN_USERNAME)
   const legacy = db.prepare("SELECT id FROM user WHERE username = '优乐美'").get()
   if (!taken && legacy) {
