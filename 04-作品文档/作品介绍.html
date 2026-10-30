@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>拾光 TimePick · 作品介绍文档</title>
+<style>
+  :root{
+    --ink:#2b2724;
+    --sub:#6d6461;
+    --accent:#b4512c;
+    --accent-soft:#f0d9c9;
+    --line:#e7ddd3;
+    --soft:#fdf8f3;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB","Source Han Sans SC",sans-serif;
+    color:var(--ink);
+    font-size:10.5pt;
+    line-height:1.78;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  p{ margin:0 0 .62em; text-align:justify; }
+  strong{ font-weight:700; color:#1f1b19; }
+  em{ font-style:normal; color:var(--accent); font-weight:600; }
+  a{ color:var(--accent); text-decoration:none; }
+  .mono{ font-family:Consolas,"Courier New",monospace; font-size:9.2pt; }
+
+  /* ---------- 封面 ---------- */
+  .cover{
+    background:linear-gradient(140deg,#fdf4ea 0%,#f8e6d6 52%,#f2d8c4 100%);
+    border:1px solid #efdfd1;
+    border-radius:6px;
+    padding:34mm 20mm 20mm;
+    min-height:262mm;
+    display:flex;
+    flex-direction:column;
+    margin-bottom:0;
+    position:relative;
+    overflow:hidden;
+  }
+  .cover::after{
+    content:"";
+    position:absolute; right:-40mm; top:-30mm;
+    width:110mm; height:110mm; border-radius:50%;
+    background:radial-gradient(circle,rgba(255,255,255,.85),rgba(255,255,255,0) 68%);
+  }
+  .cover-tag{
+    display:inline-block; font-size:9pt; letter-spacing:.18em;
+    color:#9a6a4c; border:1px solid #dcc3ae; border-radius:20px;
+    padding:3px 12px; margin-bottom:22mm; background:rgba(255,255,255,.6);
+  }
+  .cover-tag{ align-self:flex-start; }
+  .cover h1{
+    font-size:33pt; line-height:1.22; margin:0 0 6mm; letter-spacing:.02em; font-weight:700;
+  }
+  .cover h1 .en{ display:block; font-size:14pt; letter-spacing:.34em; color:#a4735a; font-weight:400; margin-top:5mm; }
+  .cover .lead{ font-size:12pt; color:#5d4a3f; line-height:1.95; margin:0 0 20mm; max-width:138mm; }
+  .cover-meta{
+    display:flex; gap:5mm; flex-wrap:wrap; font-size:9pt; color:#7d6a5d;
+  }
+  .cover-meta span{
+    background:rgba(255,255,255,.72); border:1px solid #e8d6c6; border-radius:4px;
+    padding:4px 10px;
+  }
+  .cover-bottom{
+    position:relative; z-index:2; margin-top:auto; padding-top:6mm;
+    border-top:1px solid #e3cdba; display:flex; justify-content:space-between;
+    font-size:9pt; color:#8a7364;
+  }
+
+  /* ---------- 目录 ---------- */
+  .toc{ background:var(--soft); border:1px solid var(--line); border-radius:5px; padding:7mm 9mm; margin-bottom:10mm; break-before:page; break-inside:avoid; }
+  .toc h2{ font-size:12pt; margin:0 0 4mm; border:0; padding:0; color:var(--ink); }
+  .toc ol{ margin:0; padding-left:14px; columns:2; column-gap:10mm; font-size:9.8pt; color:#4a413d; }
+  .toc li{ margin-bottom:1.8mm; break-inside:avoid; }
+  .toc li span{ color:#9b918b; }
+
+  /* ---------- 标题层级 ---------- */
+  h2{
+    font-size:15pt; margin:0 0 4mm; padding-bottom:2.6mm; break-after:avoid;
+    border-bottom:1.6px solid var(--accent);
+    letter-spacing:.01em; font-weight:700;
+  }
+  h2 .no{
+    color:var(--accent); font-size:10pt; letter-spacing:.2em;
+    display:block; margin-bottom:1.6mm; font-weight:600;
+  }
+  h3{
+    font-size:12pt; margin:7mm 0 2.4mm; padding-left:3mm; break-after:avoid;
+    border-left:3.5px solid var(--accent-soft); font-weight:700;
+  }
+  h4{ font-size:10.8pt; margin:4.5mm 0 1.6mm; color:#3d342f; font-weight:700; break-after:avoid; }
+  .sec{ break-before:auto; margin-top:11mm; }
+  .sec-first{ break-before:auto; }
+
+  /* ---------- 表格 ---------- */
+  table{ width:100%; border-collapse:collapse; margin:3mm 0 4mm; font-size:9.3pt; break-inside:auto; }
+  tr{ break-inside:avoid; }
+  thead{ display:table-header-group; }
+  th{ background:#f7ece3; color:#5d3c28; font-weight:700; text-align:left; }
+  th,td{ border:1px solid var(--line); padding:2.1mm 2.6mm; vertical-align:top; line-height:1.62; }
+  td.k{ color:#7a4a2c; font-weight:600; white-space:nowrap; }
+  tr:nth-child(even) td{ background:#fdfaf7; }
+  .cap{ font-size:8.8pt; color:#8d837d; margin:-2mm 0 4mm; }
+  table.plain th{ background:#f4f1ed; }
+
+  /* ---------- 图片 ---------- */
+  figure{ margin:3.5mm 0 4mm; break-inside:avoid; text-align:center; }
+  figure img{
+    max-width:100%; max-height:97mm; border:1px solid #e5dbd1; border-radius:4px;
+    box-shadow:0 2px 8px rgba(120,90,60,.1);
+  }
+  figcaption{ font-size:8.9pt; color:#8a807a; margin-top:2mm; line-height:1.6; }
+  figcaption b{ color:#6b5c52; }
+  .fig-row{ display:flex; gap:4mm; justify-content:center; align-items:flex-start; }
+  .fig-row figure{ flex:1; margin:0; }
+  .fig-row img{ width:100%; max-height:110mm; }
+
+  /* ---------- 强调块 ---------- */
+  .note{
+    background:#fdf6f1; border-left:3.5px solid var(--accent);
+    padding:3.2mm 5mm; margin:3.5mm 0 4.5mm; font-size:9.6pt; line-height:1.75;
+    border-radius:0 4px 4px 0; color:#4d3a2f;
+  }
+  .note b{ color:var(--accent); }
+  .quote{
+    font-size:10pt; color:#6b5a4d; border-left:2px solid #e0cdbd;
+    padding-left:5mm; margin:3mm 0 4mm; line-height:1.85;
+  }
+  .quote span{ display:block; font-size:8.8pt; color:#9c8f85; margin-top:1mm; }
+
+  ul,ol{ margin:0 0 3mm; padding-left:6mm; }
+  li{ margin-bottom:1.3mm; line-height:1.75; }
+  li::marker{ color:var(--accent); }
+
+  /* ---------- 架构图 ---------- */
+  .arch{ margin:3mm 0 5mm; break-inside:avoid; }
+  .arch-row{ display:flex; align-items:stretch; gap:3mm; margin-bottom:3mm; }
+  .arch-box{
+    flex:1; border:1px solid #dfd0c2; border-radius:4px; background:#fdfaf7;
+    padding:2.8mm 3.5mm; font-size:8.9pt; line-height:1.6;
+  }
+  .arch-box b{ display:block; font-size:9.4pt; color:#7a3f22; margin-bottom:1mm; }
+  .arch-box.amber{ background:#fdf4ec; border-color:#e6cdb7; }
+  .arch-box.grey{ background:#f6f5f3; }
+  .arch-arrow{ align-self:center; color:var(--accent); font-size:13pt; }
+  .arch-split{ display:flex; gap:3mm; margin-bottom:3mm; }
+
+  .kpi{ display:flex; gap:3mm; margin:3mm 0 4mm; }
+  .kpi div{
+    flex:1; border:1px solid var(--line); border-radius:4px; background:#fff;
+    padding:3mm; text-align:center;
+  }
+  .kpi b{ display:block; font-size:14pt; color:var(--accent); line-height:1.3; }
+  .kpi span{ font-size:8.6pt; color:#8b8079; }
+
+  .footer-note{
+    margin-top:6mm; padding-top:3mm; border-top:1px dashed var(--line);
+    font-size:8.8pt; color:#9a918b;
+  }
+  .kw{ font-size:9pt; color:#7b6d64; }
+  .kw b{ color:#5c4a3f; }
+</style>
+</head>
+<body>
+
+<!-- ===================== 封面 ===================== -->
+<div class="cover">
+  <div class="cover-tag">参赛作品介绍文档</div>
+  <h1>
+    拾光 · TimePick
+    <span class="en">MEMORY, BUILT INTO A ROOM</span>
+  </h1>
+  <p class="lead">
+    一个把记忆建成房间的记录产品。<br>
+    你写下文字，AI 替你起标题、画封面、剪一段小视频；<br>
+    这些记忆最后变成一座浮空岛上的 3D 房间——<br>
+    合上书的夜晚是一本绿色的书，老唱片是一台唱机，陪外婆煮面的下午是一只茶杯。
+  </p>
+  <div class="cover-meta">
+    <span>Vue 3 + Vite 8</span>
+    <span>Express 5 · SQLite</span>
+    <span>Cocos Creator 3.8.8</span>
+    <span>DeepSeek · 智谱 · 阿里百炼</span>
+  </div>
+  <div class="cover-bottom">
+    <span>在线体验：https://timepick-memory.app.workbuddy.host/</span>
+    <span>2026 年 10 月</span>
+  </div>
+</div>
+
+<!-- ===================== 目录 ===================== -->
+<div class="toc">
+  <h2>目录</h2>
+  <ol>
+    <li>项目详情及使用方式</li>
+    <li>项目亮点：AI 与 3D 房间</li>
+    <li>AI 技术落地使用情况概述</li>
+    <li>项目中涉及的关键技术</li>
+    <li>项目相关的图片</li>
+    <li>发表与获奖情况</li>
+    <li>与其他项目的关系及优化说明</li>
+    <li>附录：目录结构 · 部署方式 · 环境</li>
+  </ol>
+</div>
+
+<!-- ===================== 一 ===================== -->
+<section class="sec-first">
+  <h2><span class="no">第 一 部 分</span>项目详情及使用方式</h2>
+
+  <h3>1.1 我们想解决的问题</h3>
+  <p>
+    记录这件事，门槛已经很低了：备忘录、日记本、朋友圈。但真正被留下来的很少。
+    原因不在「写」，而在「回看」——写下来的东西被塞进一个时间倒序的列表里，
+    越积越多，越翻越累，最后连自己都不愿意打开。
+  </p>
+  <p>
+    我们观察到三个具体的卡点：<strong>一是写的时候有负担</strong>（要起标题、要配图、要挑分类，索性不写了）；
+    <strong>二是回看的时候没有线索</strong>（只记得"某天心情很差"，搜不出那一条）；
+    <strong>三是记录与情绪脱节</strong>（文字是平的，画面是空的，读完没有共鸣）。
+  </p>
+  <p>
+    拾光的做法是把「记录」还原成「空间」：每一条记忆不再是一行字，
+    而是房间里真实存在的一件东西。你可以走进自己的房间，看一眼桌上的杯子，
+    就知道那个下午发生过什么。
+  </p>
+
+  <h3>1.2 它是什么</h3>
+  <div class="quote">
+    拾光是一个「把记忆建成房间」的记录产品。<br>
+    写下文字 → AI 起标题、生成封面与短视频 → 记忆归入一座浮空岛 →
+    岛上是你的 3D 房间 → AI 读懂这条记忆在讲什么，把它变成房间里合适的一件摆件。<br>
+    <span>从「写一条记录」到「房间多了一件东西」，全程不需要用户做任何配置。</span>
+  </div>
+
+  <h3>1.3 功能全景</h3>
+  <table><thead><tr><th style="width:24%">模块</th><th style="width:40%">用户能做什么</th><th>关键能力</th></tr></thead>
+    <tr><td class="k">欢迎页</td><td>看到自己的记忆以相纸形式浮在窗前；点击或上滑进入</td><td>情绪化的入口视觉、登录态一键续期</td></tr>
+    <tr><td class="k">我的记忆空间</td><td>俯瞰自己的浮空群岛，每座岛对应一个阶段或主题；点岛进屋</td><td>岛屿总览、搜索、岛屿新建/改名</td></tr>
+    <tr><td class="k">记忆库</td><td>按空间、岛屿、时间、关注筛选；搜索；写、改、删、分享</td><td>语义搜索、语音输入、AI 起标题、AI 增强</td></tr>
+    <tr><td class="k">3D 记忆房间</td><td>走进房间看摆件，点摆件弹出这条记忆；切换五个视角</td><td>摆件语义检索、布局算法、宠物游走</td></tr>
+    <tr><td class="k">小橘（AI 伙伴）</td><td>在房间里和它说话，它会结合你的记忆回应，并且用语音念出来</td><td>对话、语音合成、情绪陪伴</td></tr>
+    <tr><td class="k">拾光广场</td><td>看别人公开的记忆，点赞、评论、关注、进入对方的这段记忆</td><td>公开记忆投影、热门/最新、举报</td></tr>
+    <tr><td class="k">隐私设置</td><td>控制单条记忆是否公开、管理已分享的内容</td><td>分享范围、撤回分享</td></tr>
+    <tr><td class="k">个人中心</td><td>资料、头像、宠物、消息（含系统私信）、陪伴天数</td><td>私信、通知</td></tr>
+    <tr><td class="k">管理中心</td><td>AI 密钥与能力总开关、用户与权限、活动、举报处置、通知</td><td>密钥热更新、用户级 AI 授权、匿名处置</td></tr>
+  </table>
+
+  <h3>1.4 使用方式</h3>
+  <p>
+    <strong>第一步 · 进入。</strong>打开在线地址，欢迎页是一扇窗：窗外是城市日落，窗内是你的书桌，
+    记忆以相纸的形式飘在窗前。点击「开始探索」或直接上滑即可进入（已登录会自动续上，不需要重复登录）。
+  </p>
+  <p>
+    <strong>第二步 · 建一座岛。</strong>「我的记忆空间」里，每座岛代表一个阶段或主题——
+    有人按年份分（2024 / 2025），有人按主题分（家人 / 旅行 / 工作）。岛屿自带不同地貌（樱花、雪原、城堡），
+    进哪座岛，房间就是哪种气质。
+  </p>
+  <p>
+    <strong>第三步 · 写一条记忆。</strong>点「去写一篇日记」，弹窗里<strong>只有「内容」是必填的</strong>：
+    不用想起标题——保存时由 AI 读正文生成；可以顺手加照片、视频、录音，
+    或者直接按麦克风说一段话，转成文字填进正文。默认「仅自己可见」，想公开在卡片上点「分享到广场」。
+  </p>
+  <p>
+    <strong>第四步 · 让 AI 帮你把它变得好看。</strong>保存成功后会自动弹出一个选择框：
+    「还要为这条记忆加点什么？」——AI 生成封面图片、AI 生成视频、润色文字，三项可多选，也可以都不选。
+    生成结果会明确标注「✨ AI 生成」，和你自己传的照片分开展示。
+  </p>
+  <p>
+    <strong>第五步 · 走进房间。</strong>回到「我的记忆空间」，点那座岛，就会落到一间 3D 房间里。
+    房间里已经按你的记忆摆好了东西：点桌上的唱片机，会弹出那条关于唱片的记忆；
+    底部还能左右滑动浏览这间房的全部记忆。视角可以在「小屋 / 室内 / 花园 / 书桌 / 岛体」之间切换。
+  </p>
+  <p>
+    <strong>第六步 · 让小橘陪你说两句。</strong>房间里那只橘猫叫小橘。点它，就能用文字或语音聊天——
+    它会结合你写过的记忆回应，比如你说「今天好累」，它会先安慰你，再提一句你以前记过的相似时刻，
+    并且用语音念出来。
+  </p>
+
+  <h3>1.5 怎么看到它</h3>
+  <table class="plain"><thead><tr><th style="width:22%">方式</th><th>说明</th></tr></thead>
+    <tr>
+      <td class="k">在线体验</td>
+      <td>https://timepick-memory.app.workbuddy.host/ —— 已部署，无需安装，手机浏览器同样可用。</td>
+    </tr>
+    <tr>
+      <td class="k">本地运行</td>
+      <td>解压提交包内的 <span class="mono">源码/</span>，装依赖→配环境→构建→启动，共四条命令（见附录 B）。
+        只配 <span class="mono">JWT_SECRET</span> 一项也能完整跑起来，AI 能力会自动降级为「未配置」提示，不影响记录、房间与广场。</td>
+    </tr>
+    <tr>
+      <td class="k">账号</td>
+      <td>注册需要注册口令（默认在服务端环境变量里，默认值「优乐美」），避免公开站点被批量注册；管理员账号由环境变量指定。</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ===================== 二 ===================== -->
+<section class="sec">
+  <h2><span class="no">第 二 部 分</span>项目亮点</h2>
+  <p class="kw"><b>一句话概括：</b>别人把 AI 加在「生成」上，我们把 AI 加在「你得自己动手」的每一个环节上；别人把 3D 当皮肤，我们把 3D 当成记忆的第二个数据视图。</p>
+
+  <h3>2.1 亮点一 · 3D 房间：记忆不是列表，是能走进去的空间</h3>
+
+  <figure>
+    <img src="images/fig02-islands.jpg" alt="我的记忆空间">
+    <figcaption><b>图 1</b>　「我的记忆空间」——每座浮空岛对应一个阶段或主题，点击即进入岛上的 3D 房间</figcaption>
+  </figure>
+
+  <h4>（1）三级映射：记忆 → 岛屿 → 房间</h4>
+  <p>
+    我们没有把所有记忆堆进一个房间，而是做成「一座岛一间房」。原因是：记忆天然有归属感，
+    一段时期、一类人、一种心情，本来就不是同一种空气。岛与岛之间漂在云上，进岛的过渡是「从云层落下去」，
+    这一层空间感本身就是叙事的一部分。
+  </p>
+  <p>
+    房间内部沿用固定的空间骨架（床、书桌、书架、柜子、地毯、露台），
+    但<strong>摆什么、摆在哪、朝哪边，全部由你写过的记忆决定</strong>。同一套房型，两个人打开会是两间完全不同的屋子。
+  </p>
+
+  <h4>（2）摆件不是写死的：AI 读懂这条记忆在说什么</h4>
+  <p>
+    这是整个 3D 部分最核心的一件事。很多同类作品的 3D 房间是「固定装修 + 换贴图」，
+    而拾光要求：<strong>每一条记忆都要被翻译成一件合理的家具</strong>，而且翻译得让人服气。
+  </p>
+  <p>
+    实现上是一条三条通道并联的检索链路：先做中文分词（单字 + 二元组）的 TF-IDF 字面匹配，
+    再走 <span class="mono">text-embedding-v3</span> 的 1024 维向量做语义召回，
+    两者按 <strong>0.55 × 向量 + 0.45 × 归一化字面分</strong> 融合；
+    当最高分不够自信、并且配置了文本大模型时，再让模型在候选清单里「挑一件最合适的」并给出理由。
+  </p>
+  <p>
+    检索结果不会每次现算——它<strong>写回数据库的 <span class="mono">prop_furniture</span> 字段</strong>。
+    这样房间的布局计算是一个纯同步函数，重排、重启、换设备都不会让物件「漂移」；
+    一旦发现某间房有记忆缺摆件行，系统会把整间房按规则重排一次自愈。
+  </p>
+  <table><thead><tr><th style="width:38%">用户写的原文（节选）</th><th style="width:20%">检索到的摆件</th><th>落在房间的哪里</th></tr></thead>
+    <tr><td>合上书的时候天已经黑了，心里堵得慌</td><td class="k">greenbook（绿皮书）</td><td>书架隔板上，与视线齐平</td></tr>
+    <tr><td>小时候每次去外婆家，她都会下一碗面</td><td class="k">cup（杯子）</td><td>书桌桌面，靠里侧</td></tr>
+    <tr><td>翻出爸爸年轻时候的唱片，放了一整晚</td><td class="k">record（唱片机）</td><td>柜子上表面，正面朝房间中心</td></tr>
+    <tr><td>旧相册里那个穿校服的自己</td><td class="k">camera_my（相机）</td><td>书桌桌面，与台灯错开</td></tr>
+    <tr><td>加班到天亮，电脑屏幕的光打在脸上</td><td class="k">computer（电脑）</td><td>书桌桌面正中</td></tr>
+  </table>
+  <p class="cap">表 1　同一条记忆在不同措辞下都能被正确映射；表内为线上实际结果，均已落库。</p>
+
+  <h4>（3）布局不是随机撒：7 个墙位槽 + 朝向 + 承托关系</h4>
+  <p>
+    第一版布局用「黄金角螺旋 + 按数量轮转朝向」，结果很糟：所有家具挤在一个半径 1.35 米的圆里，
+    书柜拿到 180° 时会背面朝人，桌上该放东西的地方空着。现在的做法是把房间切成
+    <strong>7 个靠墙的固定墙位槽</strong>（后墙、后左、后右、左墙、右墙、左前、右前），每格只放一件，
+    天然不重叠；每个槽自带一个「墙外法线」，用来算朝向：
+  </p>
+  <ul>
+    <li><strong>朝向策略</strong>：书柜、桌子、显示器这类「正面看得出来」的家具，正面一律朝房间中心；摆件则沿用承托面的朝向。</li>
+    <li><strong>承托关系</strong>：桌上的东西 y 直接取桌面高度、书塞进书架隔板——「放桌上/放柜里」完全在后端算完，前端只负责渲染。</li>
+    <li><strong>尺寸与贴面</strong>：模型的包围盒一律取<strong>世界空间</strong> AABB，最薄的那根轴就是法线方向——因为 glTF 导出的模型根节点常带 +90° 的 X 轴旋转，「高」在局部是 Z、「厚度」是 Y，按局部轴算会整片翻倒。</li>
+  </ul>
+
+  <figure>
+    <img src="images/fig03-room.jpg" alt="3D 记忆房间">
+    <figcaption><b>图 2</b>　3D 记忆房间全貌：左上为返回与五个视角（小屋 / 室内 / 花园 / 书桌 / 岛体），底部是这间房的记忆条，可左右滑动</figcaption>
+  </figure>
+
+  <figure>
+    <img src="images/fig04-desk.jpg" alt="桌面摆件特写">
+    <figcaption><b>图 3</b>　书桌近景：电脑、杯子、相机、书都按「承托面高度 + 朝向」落位，不是浮空的贴图</figcaption>
+  </figure>
+
+  <h4>（4）房间里能做的三件事</h4>
+  <ul>
+    <li><strong>点摆件，看记忆</strong>：点任意一件家具，会弹出对应的那条记忆（含 AI 封面、原文与分享入口），
+      不需要退回列表去找。</li>
+    <li><strong>切视角，换心情</strong>：小屋 / 室内 / 花园 / 书桌 / 岛体五个机位，书桌视角是专门的「伏案」构图，
+      岛体视角能看见整座岛悬在云上。</li>
+    <li><strong>找猫，说句话</strong>：小橘会在房间里自主走动（不是原地踏步的循环动画，而是真的按路径移动），
+      点它就开始对话，语音回答首句 1.8 秒内出声。</li>
+  </ul>
+
+  <h4>（5）34 MB 资源的加载体验</h4>
+  <p>
+    3D 首次打开要下载三十多 MB 的模型与贴图，这是硬成本。我们的处理是：
+    <strong>不做一个假的匀速进度条</strong>，而是把真实字节数（资源按 URL 累加 + XHR 进度事件）
+    与一条平滑曲线取较大值，封顶 92%，等场景真正就绪的信号到了再补满——所以进度条不会「卡在 99% 骗人」，
+    也不会一阵一阵地跳。这层等待态由宿主页面接管（小猫在云上跑 + 进度文字 + 「第一次打开要多等一会儿，之后就快了」的说明），
+    3D 引擎只负责在上报就绪后接管画面。二次打开走浏览器缓存，实测约 7 秒。
+  </p>
+  <div class="note">
+    <b>为什么用 iframe 承载 3D：</b>Cocos 的 Web 产物自带一整套渲染循环与输入系统，
+    直接塞进 Vue 的组件树里会和路由切换、滚动、手势冲突。我们把 3D 关进 iframe，
+    宿主只负责外壳、文案和加载态，两边用 <span class="mono">postMessage</span> 通信
+    （就绪信号、加载字节、点击摆件、切换视角），故障面被牢牢限制在一侧。
+  </div>
+
+  <h3>2.2 亮点二 · AI 贯穿「写 → 存 → 看 → 找 → 说 → 摆」全链路</h3>
+  <p>
+    我们的 AI 不是为了在界面上多一个按钮，而是逐条消掉「用户得自己动手」的环节。
+    下面这张表就是项目里 AI 实际站的位置：
+  </p>
+  <table><thead><tr><th style="width:13%">环节</th><th style="width:27%">AI 做了什么</th><th style="width:22%">用到的模型</th><th>用户看到什么</th></tr></thead>
+    <tr><td class="k">写</td><td>只写正文，标题由 AI 读内容后生成</td><td>DeepSeek · deepseek-chat</td><td>保存后卡片上自动出现一句像人起的标题</td></tr>
+    <tr><td class="k">存</td><td>为记忆画一张插图 / 剪一段 3～5 秒的流动画面</td><td>智谱 cogview-3-flash；万相 wan2.2-i2v-flash</td><td>详情里出现「✨ AI 生成」区块</td></tr>
+    <tr><td class="k">改</td><td>把口语化的流水账润色成可读的叙述，保留原意</td><td>DeepSeek · deepseek-chat</td><td>正文变得更顺，可随时改回</td></tr>
+    <tr><td class="k">找</td><td>换一种说法也能搜到（"朋友送的礼物陪我熬过最难的日子"）</td><td>text-embedding-v3（1024 维）</td><td>命中的卡片上标「≈ 意思相近」</td></tr>
+    <tr><td class="k">说</td><td>结合你的记忆回应情绪，并把回答念出来</td><td>qwen3-asr-flash → deepseek-chat → qwen3-tts-flash</td><td>小橘边说边出现文字气泡，语音 1.8 秒内起播</td></tr>
+    <tr><td class="k">摆</td><td>把这条记忆翻译成房间里的一件家具</td><td>字面 TF-IDF + text-embedding-v3（+ DeepSeek 兜底判定）</td><td>房间多了一件「说得通」的摆件</td></tr>
+    <tr><td class="k">管</td><td>密钥与能力的集中管理：总开关 + 用户级授权</td><td>—（工程能力）</td><td>管理中心里三把钥匙的状态与掩码</td></tr>
+  </table>
+
+  <figure>
+    <img src="images/fig06-compose.jpg" alt="写一篇日记">
+    <figcaption><b>图 4</b>　写作弹窗：只有「内容」是必填项，标题交给 AI；可语音输入、可加照片/视频/音频</figcaption>
+  </figure>
+
+  <figure>
+    <img src="images/fig07-aioffer.jpg" alt="AI 增强选项">
+    <figcaption><b>图 5</b>　保存后主动询问「还要为这条记忆加点什么？」，三项能力可多选、也可都不选</figcaption>
+  </figure>
+
+  <figure>
+    <img src="images/fig05-detail.jpg" alt="记忆详情">
+    <figcaption><b>图 6</b>　记忆详情：AI 生成的封面单独成块并标注来源，与用户自传照片分开，不混淆</figcaption>
+  </figure>
+
+  <figure>
+    <img src="images/fig08-companion.jpg" alt="小橘 AI 对话">
+    <figcaption><b>图 7</b>　小橘（AI 记忆伙伴）：会先接住情绪，再引用你记过的相似时刻，并语音念出来</figcaption>
+  </figure>
+
+  <h3>2.3 亮点三 · 情绪是第一等公民</h3>
+  <p>
+    每条记忆都带一个 mood（开心、平静、想念、难过……），这个字段不只是标签：
+    它决定卡片的配色与渐变、房间的氛围光、摆件的倾向，也决定小橘说话的语气。
+    同一条「今天很累」，在「开心」的日子和「难过」的日子，读起来是两种颜色。
+  </p>
+
+  <h3>2.4 亮点四 · 它是一个能运营的产品，而不是一个演示</h3>
+  <ul>
+    <li><strong>管理中心</strong>：AI 密钥可以随时替换（写库后立即生效，不用重启、不用重新部署，页面只显示掩码）；
+      总开关与用户级授权分离，关掉某人的 AI 权限不会影响别人。</li>
+    <li><strong>举报与处置</strong>：管理员下架一条被举报的记忆时，处置会落到记忆本体（置为不可见并撤下广场投影），
+      并给举报人和作者各发一条<strong>匿名私信</strong>——双方都看不到对方身份，避免二次冲突。</li>
+    <li><strong>手机端</strong>：断点统一，8 个页面在 390×844 与平板竖屏下逐页验过，横向溢出 0px；3D 覆盖层分桌面/触屏两套文案。</li>
+    <li><strong>没有密钥也能跑</strong>：所有 AI 能力都是「有则增强、无则降级」，摆件检索退化为纯字面通道，
+      记录、房间、广场、关注、私信照常工作。</li>
+  </ul>
+</section>
+
+<!-- ===================== 三 ===================== -->
+<section class="sec">
+  <h2><span class="no">第 三 部 分</span>AI 技术落地使用情况概述</h2>
+
+  <h3>3.1 一张总表</h3>
+  <table><thead><tr><th style="width:18%">能力</th><th style="width:20%">模型 / 接口</th><th style="width:22%">触发位置</th><th>失败与降级</th></tr></thead>
+    <tr><td class="k">标题生成</td><td>deepseek-chat</td><td>保存记忆时（服务端）</td><td>失败则用正文首句截断兜底，不阻塞保存</td></tr>
+    <tr><td class="k">文字润色</td><td>deepseek-chat</td><td>保存后弹窗勾选</td><td>返回原文并提示「这次没润色成功」</td></tr>
+    <tr><td class="k">AI 封面</td><td>cogview-3-flash</td><td>保存后弹窗勾选</td><td>提示未配置/失败，不影响记忆本身</td></tr>
+    <tr><td class="k">AI 视频</td><td>wan2.2-i2v-flash（图生视频）</td><td>保存后弹窗勾选</td><td>异步任务，失败只影响该片段</td></tr>
+    <tr><td class="k">语音转文字</td><td>qwen3-asr-flash</td><td>写作弹窗里的麦克风</td><td>失败保留已写内容，提示重录</td></tr>
+    <tr><td class="k">语音合成</td><td>qwen3-tts-flash</td><td>小橘回答时</td><td>合成失败退回纯文字气泡</td></tr>
+    <tr><td class="k">记忆语义搜索</td><td>text-embedding-v3</td><td>字面搜索 0 命中时才请求</td><td>未配置则只做字面搜索，功能不报错</td></tr>
+    <tr><td class="k">摆件语义检索</td><td>字面 TF-IDF + text-embedding-v3（+ DeepSeek 判定）</td><td>新建/编辑记忆、房间自愈时</td><td>向量不可用则纯字面；都拿不准退到「日记本」</td></tr>
+  </table>
+
+  <h3>3.2 三条让 AI 真正可用的工程约束</h3>
+
+  <h4>（1）AI 的判断要落库，不能每次现算</h4>
+  <p>
+    摆件检索的结果写进 <span class="mono">memory_item.prop_furniture</span>。
+    原因是：如果每次进房间都重新请求模型，同一段文字可能给出不同结果，
+    用户今天看见桌上的杯子、明天变成唱片机——这比「摆得不够好」更伤信任。
+    落库之后，布局计算是纯函数，重排与重启都不会改变房间的样子；
+    要改判定逻辑，改的是这一列，而不是运行时。
+  </p>
+
+  <h4>（2）语音要「先出声」，不是「先算完」</h4>
+  <p>
+    语音合成耗时随字数线性增长：一整段 300 字要 17 秒才出声，用户早就关掉了。
+    我们的做法是把回答切成<strong>首句（6～26 字）+ 长尾</strong>两段并发请求：
+    首句回来立刻播，长尾在播放的间隙里合成，接得上就无缝衔接。
+    实测首句 <strong>1.78 秒</strong>起播，整段 19.4 秒的内容听起来像一口气说完。
+    另外官方返回的音频链接 24 小时后失效，所以合成完立刻<strong>转存到自己的 <span class="mono">/uploads/tts/</span></strong>，按内容哈希命名，重复的句子直接复用。
+  </p>
+
+  <h4>（3）语义阈值必须靠样本校准</h4>
+  <p>
+    语义搜索最容易翻车的地方是阈值。我们用真实语料做了校准：
+    「换个说法」的相似度落在 0.5～0.6，不相关的内容 ≤0.44，原样措辞 0.75～0.86。
+    最终取 <strong>0.5 的绝对阈值 + 0.1 的相对落差</strong>（只保留靠近最高分的那些），
+    并且<strong>只在字面搜索 0 命中时才请求向量接口</strong>——常规搜索零额外延迟，也不会因为语义分数低而污染结果。
+    校准样本里必须放「换说法」的句子，只放「标题含关键词」的样本，会把阈值定到 0.6，换措辞的查询就全被挡在门外。
+  </p>
+
+  <h3>3.3 AI 的边界与透明</h3>
+  <ul>
+    <li><strong>标注来源</strong>：AI 生成的封面、视频单独成块，标「✨ AI 生成」，与用户自己传的照片分开陈列。</li>
+    <li><strong>不替用户做主</strong>：三项增强默认全部不勾选，用户不选就直接进库；生成过程显示进度卡，可中途离开。</li>
+    <li><strong>密钥不出服务端</strong>：页面上只显示掩码，明文永远不下发到浏览器；换钥匙即时生效，不用重启。</li>
+    <li><strong>能力可关</strong>：管理员可以按用户关闭某一项 AI 权限，被关掉的人点选时会明确提示「需要管理员开启」。</li>
+  </ul>
+
+  <h3>3.4 实测数据</h3>
+  <div class="kpi">
+    <div><b>1.78 s</b><span>语音首句起播（整段 19.4 s）</span></div>
+    <div><b>7.6 s</b><span>小橘一次完整回答</span></div>
+    <div><b>0.648</b><span>换措辞查询的最高相似度</span></div>
+    <div><b>21 / 21</b><span>线上记忆的摆件覆盖率</span></div>
+  </div>
+  <table><thead><tr><th style="width:34%">验证项</th><th>结果</th></tr></thead>
+    <tr><td class="k">记忆语义搜索</td><td>「朋友送的礼物陪我熬过最难的日子」→ 命中预期记忆，相似度 0.648；「量子物理实验」→ 无结果（最高 0.402，低于阈值 0.5，不乱召回）</td></tr>
+    <tr><td class="k">摆件检索</td><td>合上书→greenbook、外婆煮面→cup、老唱片→record、旧相册→camera_my、天亮→computer，5/5 符合预期且全部落库</td></tr>
+    <tr><td class="k">语音链路</td><td>首句 1.78 秒出声，两段音频依次播放（+1.78 s / +3.46 s），无中断、无报错</td></tr>
+    <tr><td class="k">3D 房间</td><td>线上 6 个房间逐个请求布局均正常；首屏冷启动约 24 秒（34 MB 资源），缓存后约 7 秒；无控制台报错</td></tr>
+    <tr><td class="k">举报与处置</td><td>举报 → 管理员下架 → 记忆置为不可见 + 广场投影同步撤下；举报人与作者各收到一条匿名私信，双方均看不到对方身份</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 四 ===================== -->
+<section class="sec">
+  <h2><span class="no">第 四 部 分</span>项目中涉及的关键技术</h2>
+
+  <h3>4.1 总体架构</h3>
+  <div class="arch">
+    <div class="arch-row">
+      <div class="arch-box amber">
+        <b>浏览器 · Vue 3 SPA</b>
+        欢迎页 / 记忆库 / 岛屿 / 广场 / 个人中心 / 管理中心<br>
+        3D 房间以 iframe 承载 Cocos 产物
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-box">
+        <b>单一接口入口 <span class="mono">POST /api</span></b>
+        <span class="mono">{ action, params, token }</span><br>
+        按 action 路由到具体处理函数，统一鉴权与错误码
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-box">
+        <b>服务层</b>
+        记忆 / 空间 / 广场 / 私信 / 管理<br>
+        房间布局 · 摆件检索 · 记忆语义搜索
+      </div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-box grey">
+        <b>SQLite</b>
+        单文件库，原生优先、三级驱动兜底<br>
+        <span class="mono">user · memory_item · space · room_prop · square_post</span>
+      </div>
+      <div class="arch-box grey">
+        <b>AI 提供方</b>
+        DeepSeek（文本）· 智谱（图像）· 阿里百炼（向量 / 视频 / 语音）
+      </div>
+      <div class="arch-box grey">
+        <b>静态资源</b>
+        <span class="mono">/room3d</span> Cocos web-mobile 产物（模型 / 贴图 / 引擎）<br>
+        <span class="mono">/uploads</span> 用户上传与转存的语音
+      </div>
+    </div>
+  </div>
+
+  <h3>4.2 前端</h3>
+  <ul>
+    <li><strong>Vue 3 + Vite 8 + Pinia</strong>：页面按路由懒加载，首屏只带布局壳与欢迎页；3D 页面单独成包。</li>
+    <li><strong>手写 RPC 客户端</strong>：所有请求走同一个 <span class="mono">POST /api</span>，客户端只负责拼 action、带上 token、统一错误码提示——接口数量增长不会带来前端复杂度增长。</li>
+    <li><strong>统一断点</strong>：<span class="mono">(max-width: 767.98px), (max-width: 1024px) and (orientation: portrait)</span>，
+      后半段是给平板竖屏的（768 宽的竖屏原来会吃到桌面版式）。断点块统一放在样式表末尾，避免被基础规则按「同优先级靠后覆盖」反压。</li>
+    <li><strong>图片与动效</strong>：欢迎页背景是 2000×1125 的横图，竖屏 cover 后水平偏移很大，因此把裁切偏移通过 CSS 变量下发，让按百分比定位的元素在手机端换算成视口坐标。</li>
+  </ul>
+
+  <h3>4.3 后端与数据库</h3>
+  <p>
+    Express 5 单入口 + SQLite 单文件。为了「别人拿到就能跑」，数据库驱动做了三级兜底：
+    <strong>本机优先 better-sqlite3</strong>（原生模块，最快）→
+    <strong>Node 22+ 内置的 <span class="mono">node:sqlite</span></strong>（不需要安装任何包）→
+    <strong>纯 WASM 实现</strong>（零编译）。对外是同一套 <span class="mono">exec / prepare().get|all|run</span> 接口，
+    换环境不用改一行业务代码。云上沙箱曾经因为原生模块在 dlopen 阶段段错误（try/catch 接不住，表现为「服务没起来」），
+    所以发布配置里干脆不声明原生依赖，直接走内置驱动。
+  </p>
+
+  <h3>4.4 3D 链路：Cocos → web-mobile → iframe 宿主</h3>
+  <ul>
+    <li><strong>构建</strong>：Cocos Creator 3.8.8 输出 web-mobile 静态产物，命令行构建，产物整个进仓库。</li>
+    <li><strong>通信协议</strong>：宿主 ↔ 房间用 <span class="mono">postMessage</span>——
+      房间上报 <span class="mono">tp:ready</span>（就绪）、加载字节数、点击了哪件摆件；宿主下发视角切换请求。
+      两边都能独立开发与回归。</li>
+    <li><strong>坐标与朝向</strong>：家具尺寸取世界空间 AABB；最薄轴即法线；「正面朝房间中心」用
+      <span class="mono">(sin θ, 0, cos θ)</span> 反解旋转角，避免书柜背对人。</li>
+    <li><strong>加载进度</strong>：真实字节数按 URL 去重累加 + XHR 进度事件，与平滑曲线取大值，封顶 92%，
+      收到就绪信号补满——既诚实又不会一顿一顿。</li>
+  </ul>
+
+  <h3>4.5 语义检索：字面 + 向量双通道融合</h3>
+  <p>
+    纯向量检索在中文短句上会「太松」（把不相干的也拉进来），纯字面检索又「太紧」（换个说法就找不到）。
+    所以两条通道并联：字面用中文单字 + 二元组的 TF-IDF 余弦（对短句、专有名词稳），
+    向量用 <span class="mono">text-embedding-v3</span> 的 1024 维（对改写、近义稳），
+    最后 <strong>0.55 向量 + 0.45 归一化字面</strong> 融合排序。语料变更时按指纹自动重建向量缓存，
+    不需要手工清缓存；同一套检索逻辑同时服务「摆件映射」和「记忆搜索」两处。
+  </p>
+
+  <h3>4.6 语音链路</h3>
+  <p>
+    输入方向：浏览器录音 → <span class="mono">qwen3-asr-flash</span> 转写 → 追加到正文（不清空已写内容）。
+    输出方向：DeepSeek 生成回答 → 切「首句 + 长尾」两段并发合成
+    <span class="mono">qwen3-tts-flash</span> → wav 转存到本地 <span class="mono">/uploads/tts/</span>（按内容哈希命名，规避官方链接 24 小时失效）
+    → 首句回来即播，长尾在播放间隙接上。
+  </p>
+
+  <h3>4.7 安全与可部署性</h3>
+  <ul>
+    <li><strong>密码</strong>：scrypt 加盐哈希（<span class="mono">s2$N$r$p$salt$hash</span>），旧格式登录时自动升级；比较用定长安全比较。</li>
+    <li><strong>会话</strong>：JWT；密钥从环境变量读取，且<strong>在模块最前面加载</strong>，避免出现「先读环境变量后加载 .env」导致线上一直用默认密钥的隐患。</li>
+    <li><strong>超管保护</strong>：超级管理员不可删除、不可取消、不可禁用，密码也不可由后台重置；用户列表对超管行不下发密码字段。</li>
+    <li><strong>占位符兜底</strong>：新人照抄 <span class="mono">.env.example</span> 不改就启动时，中文占位符会被识别并按「未配置」处理——
+      否则会出现「注册口令是一句中文，注册页根本没法输入」这种谁也想不到的卡点。密钥类按 ASCII 判据、普通变量按模板话术判据，避免把用户自己填的中文口令误改。</li>
+  </ul>
+</section>
+
+<!-- ===================== 五 ===================== -->
+<section class="sec">
+  <h2><span class="no">第 五 部 分</span>项目相关的图片</h2>
+  <p class="cap" style="margin-top:0">
+    以下图片均截取自线上运行版本（2026-10-30），未做合成或修饰；3D 房间与摆件为实际渲染结果。
+  </p>
+
+  <figure>
+    <img src="images/fig01-welcome.jpg" alt="欢迎页">
+    <figcaption><b>图 8</b>　欢迎页：记忆以相纸的形式浮在窗前，点击或上滑进入</figcaption>
+  </figure>
+
+  <figure>
+    <img src="images/fig09-memory.jpg" alt="记忆库">
+    <figcaption><b>图 9</b>　记忆库：按空间 / 岛屿 / 时间 / 关注筛选，右侧是这一段时间的统计</figcaption>
+  </figure>
+
+  <figure>
+    <img src="images/fig10-square.jpg" alt="拾光广场">
+    <figcaption><b>图 10</b>　拾光广场：公开记忆在这里聚成信息流，可以点赞、评论、进入对方的这段记忆</figcaption>
+  </figure>
+
+  <figure>
+    <img src="images/fig11-admin.jpg" alt="管理中心">
+    <figcaption><b>图 11</b>　管理中心 · AI 使用：三把密钥的状态与掩码、能力总开关、用户级授权</figcaption>
+  </figure>
+
+  <div class="fig-row">
+    <figure>
+      <img src="images/fig12-mobile-memory.jpg" alt="手机端记忆库">
+      <figcaption><b>图 12</b>　手机端 · 记忆库（390×844）</figcaption>
+    </figure>
+    <figure>
+      <img src="images/fig13-mobile-square.jpg" alt="手机端广场">
+      <figcaption><b>图 13</b>　手机端 · 广场（390×844）</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ===================== 六 ===================== -->
+<section class="sec">
+  <h2><span class="no">第 六 部 分</span>发表与获奖情况</h2>
+  <p>
+    本项目<strong>此前未在任何平台公开发表，也未参加过其他赛事、未获得过奖项</strong>。
+  </p>
+  <p>
+    代码托管在 GitHub（仓库 <span class="mono">asdasd123-w/TimePick</span>，公开可浏览），
+    这是本项目唯一的对外发布形式，用于版本管理与评审查看，不构成「已发表作品」。
+    线上演示站点为本项目自有部署，非第三方平台收录。
+  </p>
+  <div class="note">
+    <b>如实说明：</b>本次是作品第一次对外提交。如果评审需要，我们可以提供完整的提交历史（按模块切分、逐条可追溯）
+    与从零部署的验证记录。
+  </div>
+
+  <h2 style="margin-top:12mm"><span class="no">第 七 部 分</span>与其他项目的关系及优化说明</h2>
+  <p>
+    拾光是<strong>从零开始的原创项目</strong>，不是对某个现有产品的二次开发，也没有基于任何模板或框架脚手架生成业务代码。
+    它的每一层（页面、接口、数据库结构、3D 房间布局算法、检索链路）都是为本项目写的。
+  </p>
+
+  <h3>7.1 使用的开源组件</h3>
+  <table class="plain"><thead><tr><th style="width:30%">组件</th><th style="width:18%">用途</th><th>说明</th></tr></thead>
+    <tr><td class="k">Vue 3 / Vue Router / Pinia</td><td>前端框架</td><td>通用框架，未做业务定制</td></tr>
+    <tr><td class="k">Vite 8</td><td>构建工具</td><td>默认配置为主，仅按需调整产物目录策略</td></tr>
+    <tr><td class="k">Express 5</td><td>HTTP 服务</td><td>只用到最基础的路由与静态托管</td></tr>
+    <tr><td class="k">Cocos Creator 3.8.8</td><td>3D 引擎</td><td>引擎与基础场景能力来自官方；房间骨架、摆件加载、交互与朝向计算为本项目实现</td></tr>
+    <tr><td class="k">SQLite 驱动</td><td>数据存储</td><td>better-sqlite3 / node:sqlite / wasm 三选一，见 4.3</td></tr>
+  </table>
+  <p class="cap" style="margin-top:-1mm">表 2　第三方依赖清单；美术资源中，房间基础模型与宠物精灵图来自公开素材，摆件摆放规则、语义映射与全部交互逻辑为自制。</p>
+
+  <h3>7.2 我们自己在迭代中优化掉的部分</h3>
+  <p>
+    这个项目从最初的原型到现在，有几次比较大的自我推翻，写在下面是因为它们直接决定了现在的形态：
+  </p>
+  <ul>
+    <li><strong>从「两个信息流」收敛成「一个广场」。</strong>早期有一个独立的「共享记忆」页，和广场并存，
+      结果同一份内容在两处出现、互动数据各算一套。现在公开记忆由服务端投影成一条广场动态（正文 = 标题 + 内容），
+      分享、取消分享、编辑、删除都在同一处同步——只有一个入口，也就没有对不上的数据。</li>
+    <li><strong>从「硬编码摆件」换成「检索决定摆件」。</strong>最初是按记忆类型直接映射到固定模型，
+      写「今天吃了面」和「今天很难过」会拿到同一件东西。现在改成语义检索 + 结果落库，房间才开始「像这个人」。</li>
+    <li><strong>从「黄金角螺旋」换成「墙位槽 + 朝向 + 承托」。</strong>第一版布局看起来像随手撒的，
+      书柜还会背面朝人；现在的规则见 2.1（3）。</li>
+    <li><strong>语音从「整段合成」换成「首句 + 长尾」。</strong>整段 300 字要等 17 秒，用户不会等；现在 1.78 秒出声。</li>
+    <li><strong>删掉首页，把问候语搬进房间。</strong>原来进站先到一个「今日一句 + 相伴天数」的首页，
+      多点一次才到记忆；现在这一段信息放在 3D 房间顶部，进站直达「我的记忆空间」。</li>
+    <li><strong>手机端整体重做了一轮。</strong>统一断点、补热区、把 3D 覆盖层拆成桌面/触屏两套文案，
+      8 个页面在 390 宽下逐页验过横向溢出为 0。</li>
+  </ul>
+  <p class="footer-note">
+    说明：本文档中的所有数字（接口耗时、相似度、覆盖率、页面数）均来自本项目在 2026-10-30 的实测记录，
+    测试环境为本地 Node 22 与线上沙箱各一轮；截图取自线上版本。
+  </p>
+</section>
+
+<!-- ===================== 附录 ===================== -->
+<section class="sec">
+  <h2><span class="no">附 录</span>目录结构 · 部署方式 · 环境</h2>
+
+  <h3>A. 提交包结构</h3>
+  <table class="plain"><thead><tr><th style="width:30%">目录 / 文件</th><th>内容</th></tr></thead>
+    <tr><td class="k">源码/</td><td>完整可运行工程：前端 <span class="mono">src/</span>、后端 <span class="mono">server/</span>、3D 产物 <span class="mono">public/room3d/</span>、环境变量示例</td></tr>
+    <tr><td class="k">02-3D房间工程/</td><td>Cocos Creator 3.8.8 工程源文件（场景、脚本、模型、贴图），可用编辑器打开继续修改</td></tr>
+    <tr><td class="k">03-运行与部署说明/</td><td>运行说明、环境变量示例、部署与数据迁移说明</td></tr>
+    <tr><td class="k">04-作品文档/</td><td>本文档及配图</td></tr>
+    <tr><td class="k">项目.zip</td><td>源码 + 3D 工程的压缩包，便于一键解压</td></tr>
+  </table>
+
+  <h3>B. 部署方式（四步）</h3>
+  <ol>
+    <li><span class="mono">cd 源码 &amp;&amp; npm install</span>　安装依赖</li>
+    <li><span class="mono">cp .env.example .env.local</span>　复制环境变量模板，至少把 <span class="mono">JWT_SECRET</span> 改成一串自己的随机字符</li>
+    <li><span class="mono">npm run build</span>　构建前端（3D 产物已在 <span class="mono">public/room3d/</span>，无需重新构建）</li>
+    <li><span class="mono">node server/index.js</span>　启动，默认 <span class="mono">http://127.0.0.1:8787</span></li>
+  </ol>
+  <div class="note">
+    <b>注意：</b>提交包内<strong>不含</strong> <span class="mono">dist/</span> 构建产物，也没有数据库文件与任何密钥。
+    必须先执行第 3 步，否则打开首页是 404；首次启动会自动建库建表，不需要手工导入 SQL。
+  </div>
+
+  <h3>C. 环境变量（最小集）</h3>
+  <table class="plain"><thead><tr><th style="width:30%">变量</th><th style="width:14%">是否必填</th><th>作用与缺省行为</th></tr></thead>
+    <tr><td class="k">JWT_SECRET</td><td>建议必填</td><td>会话签名密钥；若不填/仍是占位符，服务端每次启动随机生成（重启后需重新登录）</td></tr>
+    <tr><td class="k">SUPER_ADMIN_USERNAME</td><td>可选</td><td>超级管理员手机号；不填则超管功能关闭</td></tr>
+    <tr><td class="k">REGISTER_PASSPHRASE</td><td>可选</td><td>注册口令；不填回落到默认口令</td></tr>
+    <tr><td class="k">DEEPSEEK_API_KEY</td><td>可选</td><td>标题、润色、对话；不填则这些能力提示「未配置」</td></tr>
+    <tr><td class="k">ZHIPU_API_KEY</td><td>可选</td><td>AI 封面；不填则不出现封面选项</td></tr>
+    <tr><td class="k">DASHSCOPE_API_KEY</td><td>可选</td><td>向量检索、图生视频、语音转写与合成；不填则摆件检索退化为字面通道</td></tr>
+  </table>
+  <p class="cap" style="margin-top:-1mm">
+    三个 AI 密钥也可以在管理中心的「AI 使用」里填写（写库后立即生效，优先级高于环境变量），只有超级管理员可见、可改。
+  </p>
+
+  <h3>D. 实测环境</h3>
+  <table class="plain"><thead><tr><th style="width:26%">项目</th><th>配置</th></tr></thead>
+    <tr><td class="k">本地</td><td>Windows 11 · Node 22 · Chrome · SQLite 单文件库</td></tr>
+    <tr><td class="k">线上</td><td>沙箱容器（http-service），静态资源与 API 同源，3D 产物整包部署</td></tr>
+    <tr><td class="k">数据规模</td><td>8 个账号 · 21 条记忆 · 6 座岛 · 8 条广场动态 · 21 件房间摆件</td></tr>
+    <tr><td class="k">页面验证</td><td>桌面 1440×900 与手机 390×844 各 7 个页面，共 14 组：横向溢出 0、脚本报错 0、4xx 0</td></tr>
+    <tr><td class="k">干净部署验证</td><td>从提交包解压到全新目录：npm install → 只填 JWT_SECRET → build → 启动，
+      注册、建岛、写记忆、进房间全链路通过；未配密钥时启动日志明确提示，AI 能力自动关闭</td></tr>
+  </table>
+</section>
+
+  <div style="margin-top:26mm; padding-top:8mm; border-top:1.6px solid var(--accent); text-align:center;">
+    <p style="font-size:11pt; color:#7a5c49; margin-bottom:3mm; text-align:center;">—— 全文完 ——</p>
+    <p style="font-size:9.2pt; color:#9a8b80; line-height:1.9; text-align:center;">
+      拾光 · TimePick　|　作品介绍文档　|　2026 年 10 月<br>
+      在线体验：https://timepick-memory.app.workbuddy.host/<br>
+      代码仓库：https://github.com/asdasd123-w/TimePick
+    </p>
+  </div>
+</body>
+</html>
