@@ -27,8 +27,10 @@
 
     <!-- 云海飞鸟已按需求整层删除（2026-10-27）：8 只雪碧图逐帧 + drop-shadow 是这页的卡顿来源之一。 -->
 
-    <!-- 右上角搜索 -->
-    <div v-if="islands.length" class="isle-search">
+    <!-- 右上角搜索。★ 2026-10-29: 显示条件从「搜索结果非空」改成「有没有岛」——
+         原先绑定 islands.length（过滤后的结果），搜索无匹配时搜索框和清空按钮会一起消失，
+         用户只能刷新页面才能改关键词（验证报告 FIND-01，P1）。 -->
+    <div v-if="store.islands.length" class="isle-search">
       <input
         v-model="query"
         class="isle-search-input"
@@ -204,10 +206,19 @@
       </div>
     </div>
 
-    <!-- 空态 -->
+    <!-- 空态。★ 2026-10-29: 拆成「搜索无结果」和「一座岛都没有」两套文案。
+         原来两种情形共用"还没有记忆小岛 + 去记忆库写点什么"，搜索没结果时会误导用户
+         去新建内容（验证报告 FIND-01）。 -->
     <div v-if="!islandsLoading && !islands.length" class="isle-empty">
-      <p>还没有记忆小岛</p>
-      <p class="isle-empty-sub">去「记忆库」写点什么，它就会变成一座小岛</p>
+      <template v-if="query.trim()">
+        <p>没有找到「{{ query.trim() }}」</p>
+        <p class="isle-empty-sub">换个关键词试试，或清空搜索看全部小岛</p>
+        <button class="isle-empty-btn" type="button" @click="query = ''">清空搜索</button>
+      </template>
+      <template v-else>
+        <p>还没有记忆小岛</p>
+        <p class="isle-empty-sub">去「记忆库」写点什么，它就会变成一座小岛</p>
+      </template>
     </div>
     <div v-if="islandsLoading" class="isle-empty">小岛正在浮出海面…</div>
 
@@ -982,6 +993,25 @@ const CAT_THOUGHTS = [
   margin-top: 6px;
   font-size: 15.5px;
   color: #8a7a6d;
+}
+/* 「搜索无结果」时才出现的就地恢复入口: 不用刷新页面也能回到全部小岛 */
+.isle-empty-btn {
+  margin-top: 14px;
+  padding: 8px 20px;
+  border: 1px solid rgba(160, 128, 99, 0.4);
+  border-radius: 999px;
+  background: rgba(255, 252, 246, 0.92);
+  color: #8a6a4a;
+  font-size: 14.5px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+.isle-empty-btn:hover {
+  background: #f3e6d4;
+  color: #6b5540;
 }
 
 /* 猫气泡锚点: 复刻背景图 object-fit: cover 的渲染框 */

@@ -212,12 +212,14 @@ function play(act) {
 }
 
 // ---- 自主行为: 随机动作 + 随机游走 (冷却单位 ms, 受空间偏好动效档位缩放) ----
-// 间隔给得比较长: 猫大部分时间应该在发呆/打盹, 频繁切动作会显得躁。
+// ★ 2026-10-29：游走间隔 20~46s 收到 9~24s、步幅 70~200px 放到 110~330px。
+//   原因：间隔 20s 起步时，猫会有大半分钟完全不动 —— 用户看到的就是「小猫卡住了」
+//   （实测 100 秒里最长静止 55 秒）。即使逻辑没坏，观感也是死了。宁可多走两趟。
 // 数值是"适中"档的基准, 动效=高时 petFactor=0.55 会更活跃, 动效=低时 2.2 更懒。
-const AMBIENT_MIN = 14000
-const AMBIENT_RAND = 16000
-const WANDER_MIN = 20000
-const WANDER_RAND = 26000
+const AMBIENT_MIN = 9000
+const AMBIENT_RAND = 11000
+const WANDER_MIN = 9000
+const WANDER_RAND = 15000
 let ambientMs = (AMBIENT_MIN + Math.floor(Math.random() * AMBIENT_RAND)) * spacePrefs.petFactor
 let wanderMs = (WANDER_MIN + Math.floor(Math.random() * WANDER_RAND)) * spacePrefs.petFactor
 let walkDir = 1
@@ -261,14 +263,21 @@ function startWander() {
   const nearLeft = pos.x < window.innerWidth * 0.2
   const nearRight = pos.x > window.innerWidth * 0.8
   walkDir = nearLeft ? 1 : nearRight ? -1 : Math.random() < 0.5 ? -1 : 1
-  // 随机溜达距离/随机巡航速度, 每次走得不一样
-  const dist = 70 + Math.random() * 130
+  // 随机溜达距离/随机巡航速度, 每次走得不一样（步幅也一并放大，否则动起来也像在原地挪）
+  const dist = 110 + Math.random() * 220
   moveTarget = {
     x: Math.min(Math.max(pos.x + walkDir * dist, 4), window.innerWidth - BOX_W.value - 4),
     y: Math.min(Math.max(pos.y + (Math.random() - 0.5) * 60, 4), window.innerHeight - BOX_H.value - 4),
     cruise: 0.032 + Math.random() * 0.026,
   }
   play(walkDir > 0 ? 'walkR' : 'walkL')
+  // ★★ 2026-10-29 修「小猫时不时卡住」的根因：
+  //   自主游走只设了 moveTarget + 播走路动画，却**没有 startMove()**。
+  //   于是位移循环（rAF）根本没跑，位置永远不变 —— 表现为小猫原地踏步、
+  //   而且因为 moveTarget 一直非空，advanceFrames 里的自主行为被全部跳过，
+  //   它会**永远**保持走路姿势，直到用户双击/拖动才"解冻"。
+  //   实测（95 秒）：换帧 215 次、位移 0px、不同位置只有 1 个。
+  startMove()
 }
 
 /**
@@ -302,6 +311,9 @@ function moveTo(clientX, clientY) {
  *   （本来就只有 8~10 帧/秒），位置交给 rAF 每帧写 transform，手感回到 60fps。
  */
 function advanceFrames(dt) {
+  // ★ 兜底：有目标点却没有位移循环 = 一定会原地踏步卡死。
+  //   任何以后新增的"让猫走过去"的入口忘了 startMove()，这里都还能自愈。
+  if (moveTarget && !raf) startMove()
   holdMs -= dt
   while (holdMs <= 0) {
     sp += 1
@@ -406,15 +418,23 @@ function tickFrames() {
 
 /* ---- 位移驱动：只在真的在走的时候开 rAF ---- */
 function loop(ts) {
-  if (!isMoving()) {
-    raf = 0
-    return
-  }
-  raf = requestAnimationFrame(loop)
+  // 进回调先清掉句柄：这样帧里再判断 `!raf` 才是"真的没有下一帧了"，
+  // 也不会因为一次异常就让 raf 留下一个永远等不到帧的僵尸值。
+  raf = 0
+  if (!isMoving()) return
   const dt = lastTs ? Math.min(100, ts - lastTs) : 16
   lastTs = ts
-  advanceMove(dt)
+  try {
+    advanceMove(dt)
+  } catch (err) {
+    // 位移逻辑出任何异常都不要让猫卡在半路：放弃目标、回到待机。
+    moveTarget = null
+    vel = 0
+    play('idle')
+    return
+  }
   applyTransform()
+  if (isMoving()) raf = requestAnimationFrame(loop)
 }
 
 function startMove() {
@@ -434,6 +454,9 @@ function startLoop() {
   stopMove()
   lastFrameAt = 0
   tickFrames()
+  // ★ 切回标签页时如果在游走途中，rAF 已经被 stopLoop 掐掉了，
+  //   这里必须把位移重新接上，否则又变成原地踏步（同 startWander 的坑）。
+  if (moveTarget) startMove()
 }
 
 function stopLoop() {

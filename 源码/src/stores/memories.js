@@ -11,7 +11,9 @@ import { generateMemoryCover, getLastCoverError, isPermissionDenied } from '@/ap
 //   以及「类型」下拉和「其他」自定义类型输入 —— 都已按需求删掉：
 //   用户只写内容，标题由服务端 AI 生成。TYPE_OPTIONS 只留给「筛选历史数据」用。
 export const TYPE_OPTIONS = ['全部类型', '旅游', '工作', '学习', '其他']
-export const TIME_OPTIONS = ['时间', '今天', '本周', '本月']
+// 首项是「全部时间」而不是「时间」：原来那个单字下拉项语义不完整，
+// 用户看不出它代表"不筛选"（验证报告 FIND-06）。
+export const TIME_OPTIONS = ['全部时间', '今天', '本周', '本月']
 
 // 服务器行 -> 前端条目形状(记忆库/首页/记忆空间三页共用)
 function mapRow(r) {

@@ -1,15 +1,23 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-// ★ 2026-10-28 图片降采样：原始素材是 1536×2288（解码后约 14MB），而猫在页面上
-//   只有 ~140 CSS px 宽 —— 每帧都在从超大纹理里按 ~8% 采样，手机 GPU 上很吃亏。
-//   这里换成 1/3 尺寸的同图（512×763，≤143KB），**逻辑坐标不变**：
-//   spriteStyle 里的 background-size / position 都是用下面的 w/h 和帧表算的，
-//   只要 w/h 保持原值，换小图只影响采样密度，显示尺寸与清晰度完全一致（仍 ≥2× 屏密度）。
-import sheetOrange from '../assets/pet/cat-orange-s.webp'
-import sheetCalico from '../assets/pet/cat-calico-s.webp'
-import sheetTabby from '../assets/pet/cat-tabby-s.webp'
-import sheetTuxedo from '../assets/pet/cat-tuxedo-s.webp'
-import sheetWhite from '../assets/pet/cat-white-s.webp'
+// ★★ 两套图，别混用（2026-10-29 修）：
+//   src   = 原尺寸高清图（1536×2288 那种）。**帧表坐标就是它的像素坐标**，
+//           宠物本体（桌面 140×178、手机 92×117）必须用它：换 1/3 小图后
+//           每帧只有 63×69 个像素被拉到 146px 宽，实测糊成一片。
+//   small = 原图的 1/3（512×763）。只给「肉眼 24~48px」的小头像和 52px 的
+//           跑酷 canvas 用，省的是解码内存而不是画质。
+//   ★ 两者坐标系差 3 倍：canvas 里 drawImage 的 source 矩形必须乘
+//     sheetRatio()，写死比例会在重新压图后悄悄切到隔壁格子（跑酷小猫乱码就是它）。
+import sheetOrange from '../assets/spritesheet.webp'
+import sheetCalico from '../assets/cat-calico.webp'
+import sheetTabby from '../assets/cat-tabby.webp'
+import sheetTuxedo from '../assets/cat-tuxedo.webp'
+import sheetWhite from '../assets/cat-white.webp'
+import sheetOrangeS from '../assets/pet/cat-orange-s.webp'
+import sheetCalicoS from '../assets/pet/cat-calico-s.webp'
+import sheetTabbyS from '../assets/pet/cat-tabby-s.webp'
+import sheetTuxedoS from '../assets/pet/cat-tuxedo-s.webp'
+import sheetWhiteS from '../assets/pet/cat-white-s.webp'
 import { PET_FRAMES, PET_CONTENT } from '../data/petFrames'
 
 // 每张花色的逐帧裁剪窗口都不同: 虽然是同一套动作的换色素材, 但画布尺寸、
@@ -19,14 +27,21 @@ import { PET_FRAMES, PET_CONTENT } from '../data/petFrames'
 export const SHEET_BASE_W = 1536
 export const SHEET_BASE_H = 2288
 
-// w/h 是**原始素材**的逻辑尺寸（帧表就是按这个坐标系实测的），
-// 图片本身已经是原图的 1/3 —— 两者不匹配是刻意的，别"顺手"改成小图尺寸。
+// w/h 是**原始素材**的逻辑尺寸（帧表就是按这个坐标系实测的）。
+// small 是同一张图的 1/3，尺寸信息这里不重复写 —— 用 sheetRatio() 现算。
 export const PET_SHEETS = {
-  橘猫: { src: sheetOrange, w: 1536, h: 2288 },
-  三花猫: { src: sheetCalico, w: 1027, h: 1532 },
-  虎斑猫: { src: sheetTabby, w: 1027, h: 1531 },
-  黑白猫: { src: sheetTuxedo, w: 1024, h: 1536 },
-  白猫: { src: sheetWhite, w: 1024, h: 1536 },
+  橘猫: { src: sheetOrange, small: sheetOrangeS, w: 1536, h: 2288 },
+  三花猫: { src: sheetCalico, small: sheetCalicoS, w: 1027, h: 1532 },
+  虎斑猫: { src: sheetTabby, small: sheetTabbyS, w: 1027, h: 1531 },
+  黑白猫: { src: sheetTuxedo, small: sheetTuxedoS, w: 1024, h: 1536 },
+  白猫: { src: sheetWhite, small: sheetWhiteS, w: 1024, h: 1536 },
+}
+
+// 帧表坐标(按 w/h) → 某张实际图片的像素坐标，差一个比例。
+// 高清图是 1，1/3 小图是 0.333；从 naturalWidth 现算，换图不会错位。
+export function sheetRatio(sheet, img) {
+  const nw = img && img.naturalWidth
+  return sheet && nw ? nw / sheet.w : 1
 }
 
 // 各花色的帧表 + 猫身内容的真实尺寸(用来折算统一的显示大小)

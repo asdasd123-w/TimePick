@@ -19,6 +19,11 @@ const companion = useCompanionStore()
 const sheet = computed(() => petSheet(props.type || companion.petType))
 const rows = computed(() => petRows(props.type || companion.petType))
 
+// ★ 这个组件只画 24~48px 的小头像，用 1/3 小图（省解码内存）。
+//   大尺寸的宠物本体走 petCompanion.vue，那边用的是高清图。
+//   两者都靠 backgroundSize 写「逻辑尺寸 × 比例」，所以坐标系没差别。
+const imgSrc = computed(() => sheet.value.small || sheet.value.src)
+
 const frameStyle = computed(() => {
   const s = sheet.value
   const row = rows.value[0]
@@ -33,7 +38,7 @@ const frameStyle = computed(() => {
     '--ps-h': h,
     width: k(x1 - x0 + 1),
     height: 'var(--ps-h)',
-    backgroundImage: `url(${s.src})`,
+    backgroundImage: `url(${imgSrc.value})`,
     backgroundSize: `${k(s.w)} ${k(s.h)}`,
     backgroundPosition: `${k(-x0)} ${k(-y0)}`,
   }

@@ -60,6 +60,19 @@ const router = createRouter({
 // 后端临时不可达时把用户踢回欢迎页, 看起来就像"点岛跳欢迎页"。
 router.beforeEach(async (to, from) => {
   const auth = useCloudAuthStore()
+  // ★ 2026-10-29: 管理中心按角色拦一次（验证报告 FIND-07）。
+  //   后端一直会拒绝非管理员的数据请求, 但前端没拦, 普通账号在地址栏输 /index/admin
+  //   仍能渲染出一整套后台外壳(列表为空), 等于把后台界面结构暴露给所有登录用户。
+  //   注意两点：① 必须放在下面「/index 内部切换直接放行」之前, 否则从侧栏点进去会绕过；
+  //   ② 首次直接加载时 store 里还没有 user（只有一个 token），必须先 ensureSession
+  //     把角色拿回来，否则连管理员也会被误挡走。
+  if (to.name === 'admin') {
+    if (!auth.isLogin) return { name: 'welcome' }
+    const ok = await auth.ensureSession()
+    if (!ok) return { name: 'welcome' }
+    if (!auth.isAdmin) return { name: 'space' }
+    return true
+  }
   if (to.path.startsWith('/room')) return auth.isLogin ? true : { name: 'welcome' }
   if (!to.path.startsWith('/index')) return true
   // 已经在主页内部切换子路由(左侧导航), 不必重复校验

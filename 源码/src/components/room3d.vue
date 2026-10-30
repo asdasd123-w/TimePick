@@ -4,7 +4,23 @@
        而不是它一直挂在半透明的 loading 遮罩上面乱晃。 -->
   <div class="room3d" :class="{ booting }">
     <!-- 3D 房间由 Cocos 构建的 Web 产物承载（默认同源 /room3d，见 VITE_ROOM3D_URL） -->
-    <iframe v-if="built" ref="frame" class="room3d-frame" :src="src" frameborder="0"></iframe>
+    <iframe v-if="built && !layoutError" ref="frame" class="room3d-frame" :src="src" frameborder="0"></iframe>
+
+    <!-- ★ 2026-10-29 房间进入失败（对应验证报告 FIX03）：
+         以前布局接口报错只在角落闪一句 2.6 秒的提示，随后照样显示一间空屋子 ——
+         用户会以为自己房间里的东西丢了。现在改成**常驻**错误页：说清原因、给重试和返回，
+         并且把 iframe 一起摘掉，不再假装"房间正常、只是没东西"。
+         ★ 这一支必须排在下面「产物没就位」之前，否则 built=true 时会先命中那一支。 -->
+    <div v-else-if="layoutError" class="room-empty room-error">
+      <div class="re-card">
+        <p class="re-title">暂时无法进入房间</p>
+        <p class="re-sub">{{ layoutError }}</p>
+        <div class="re-acts">
+          <button class="re-btn" type="button" @click="goBack">← 返回记忆空间</button>
+          <button class="re-btn primary" type="button" @click="retryLayout">重新加载</button>
+        </div>
+      </div>
+    </div>
 
     <!-- 产物还没就位: 绝不能让 iframe 去请求 /room3d/
          —— 此时 dev server / 静态服务的 SPA 兜底会把 TimePick 自己的首页返回给 iframe，
@@ -250,7 +266,9 @@
     <!-- 左上角一列：返回 + 视角导航，下面紧跟操作提示。
          放在同一个纵向流里（而不是各自绝对定位），这样导航换行成两排时
          提示卡会自动往下让位，永远不会压到下方的东西。 -->
-    <div class="left-col">
+    <!-- ★ 2026-10-29: 布局失败时整列收起 —— 错误卡片里已经有「返回 / 重新加载」，
+         再挂一个左上角的返回按钮只是噪音（而且它指向同一个地方）。 -->
+    <div v-if="!layoutError" class="left-col">
       <div class="top-actions">
         <button class="back-btn" type="button" @click="goBack">← 返回记忆空间</button>
         <!-- 镜头视角快捷定位：小屋 / 室内 / 花园 / 书桌 / 岛体。
@@ -325,7 +343,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCloudAuthStore } from '@/stores/cloudAuth'
-import { useCompanionStore, PET_SHEETS, petRows } from '@/stores/companion'
+import { useCompanionStore, PET_SHEETS, petRows, sheetRatio } from '@/stores/companion'
 import { call } from '@/api/cloud'
 import AiCompanion from './aiCompanion.vue'
 // 加载页背景（原来是一层径向渐变，按需求换成 background.png）：大屏用 1600w、小屏用 900w
@@ -365,6 +383,11 @@ const src = computed(() => {
 // 不做这一步的话，产物缺失时 iframe 会拿到 SPA 兜底页 —— 也就是 TimePick 首页，
 // 用户看到的就是"点岛之后跳到了欢迎页"。
 const probing = ref(true)
+// 房间进入失败的原因（非空时：模板切错误页、iframe 摘掉、等待层收起）
+// ★ 2026-10-29 对应验证报告 FIX03：原来 catch 里只 tip 2.6 秒，然后照常显示一间
+//   空屋子（用户以为东西丢了）。现在改成常驻错误。
+const layoutError = ref('')
+
 const built = ref(false)
 // 跨域独立部署（VITE_ROOM3D_URL 指到别的域/端口）或本地文件打开时不做探测，直接交给 iframe
 const canProbe = computed(() => !/^https?:\/\//i.test(ROOM3D_BASE) && location.protocol !== 'file:')
@@ -528,7 +551,11 @@ const booting = computed(() => !built.value || loading.value)
 // 唯一的等待页：探测产物那几百毫秒 + 房间真正加载的全过程都用这一层
 // （小猫跑酷 + 真实下载进度）。以前探测阶段会先闪一个「正在打开 3D 房间…」的空态卡片，
 // 看起来像两个不同的加载页（2026-10-21 用户反馈），现在合并成一个。
-const showWaiting = computed(() => probing.value || (built.value && loading.value))
+// ★ 2026-10-29: 布局失败时立刻收起等待层。否则 iframe 已被摘掉、'tp:ready' 永远不会来，
+//   用户被迫看满 30 秒跑酷才见到错误页 —— 错误态必须优先于加载态。
+const showWaiting = computed(
+  () => !layoutError.value && (probing.value || (built.value && loading.value))
+)
 
 // 操作提示：房间就绪后常驻显示（按需求「常驻但可以隐藏」），
 // 由面板右上角的 × 收起，收起后左下角留一个「?」唤出。
@@ -880,11 +907,20 @@ const SPARKS = Array.from({ length: 14 }, (_, i) => ({
   },
 }))
 
+function retryLayout() {
+  layoutError.value = ''
+  loadLayout()
+}
+
 // 进入房间即拉取布局（含每条记忆的媒体），点家具时直接取用，无需再请求
 async function loadLayout() {
-  if (!spaceId.value) return
+  if (!spaceId.value) {
+    layoutError.value = '没有拿到房间编号，可能是链接不完整。'
+    return
+  }
   try {
     const data = await call('room/layout', { space_id: spaceId.value })
+    layoutError.value = ''
     const map = {}
     for (const p of data.props || []) map[p.item_id] = p
     propMap.value = map
@@ -894,8 +930,9 @@ async function loadLayout() {
     maxItems.value = Number(data.max_items) || 0
     fixedCount.value = (data.fixed || []).length
   } catch (e) {
-    tipText.value = '房间布局加载失败：' + (e.message || '请稍后重试')
-    setTimeout(() => (tipText.value = ''), 2600)
+    // 服务端对「不存在 / 不是自己的空间」会回明确的业务错误，直接把原话显示出来，
+    // 不用泛泛的"请稍后重试"——用户看到"记忆空间不存在"才知道是链接问题还是网络问题。
+    layoutError.value = e.message || '房间数据加载失败，请稍后重试。'
   }
 }
 
@@ -1185,22 +1222,28 @@ const CAT_FOOT_JUMP = 1
 const CAT_ROW_RUN = 1
 const CAT_ROW_JUMP = 4
 const catImages = new Map() // src -> HTMLImageElement（同一花色只加载一次）
+// 跑酷只要 52px 高，用 1/3 小图足够清楚，也省掉进 3D 时那 2.8MB 的解码。
+// ★ 但帧表坐标是**原图**空间的，所以每张图都要带一个 sheetRatio：
+//   之前漏了这一步，drawImage 直接拿 1536 空间的矩形去切 512 宽的图，
+//   源矩形越界被裁剪，画出来的就是两团糊在一起的色块（线上截图里的"乱码"）。
 function ensureCatImage(type) {
   const sheet = PET_SHEETS[type] || PET_SHEETS['橘猫']
-  let img = catImages.get(sheet.src)
+  const src = sheet.small || sheet.src
+  let img = catImages.get(src)
   if (!img) {
     img = new Image()
     img.decoding = 'async'
-    img.src = sheet.src
-    catImages.set(sheet.src, img)
+    img.src = src
+    catImages.set(src, img)
   }
-  return img
+  return { img, sheet }
 }
 
 // 画猫：帧窗口取自 petFrames.js（素材像素坐标），按高度等比缩放到 CAT_DRAW_H
 function drawCat(ctx, st) {
   const rows = st.catRows
   const img = st.catImg
+  const sheet = st.catSheet
   if (!rows || !rows.length || !img) return false
   const airborne = st.y > 0.5
   const row = rows[airborne ? CAT_ROW_JUMP : CAT_ROW_RUN] || rows[0]
@@ -1218,7 +1261,19 @@ function drawCat(ctx, st) {
   // 帧底部有透明边，按行补一个偏移，让脚真正踩在地面线上
   const y = st.ground - st.y - CAT_DRAW_H + (airborne ? CAT_FOOT_JUMP : CAT_FOOT_RUN)
   if (img.complete && img.naturalWidth) {
-    ctx.drawImage(img, x0, y0, fw, fh, x, y, w, CAT_DRAW_H)
+    // 帧表(原图坐标) → 这张图的实际像素坐标
+    const r = sheetRatio(sheet, img)
+    ctx.drawImage(
+      img,
+      x0 * r,
+      y0 * r,
+      Math.max(1, fw * r),
+      Math.max(1, fh * r),
+      x,
+      y,
+      w,
+      CAT_DRAW_H
+    )
   } else {
     // 精灵图还没解码完（极少见）：先用同色系简笔猫占位，别让跑道空着
     catPlaceholder(ctx, x, y, w, CAT_DRAW_H)
@@ -1275,7 +1330,9 @@ function dinoStart() {
   }
   // 用用户自己那只猫（拾光兽）跑酷：花色跟随后台设置，换猫后这里也跟着换
   const petType = PET_SHEETS[companion.petType] ? companion.petType : '橘猫'
-  st.catImg = ensureCatImage(petType)
+  const catAsset = ensureCatImage(petType)
+  st.catImg = catAsset.img
+  st.catSheet = catAsset.sheet
   st.catRows = petRows(petType) || []
   for (let i = 0; i < 6; i++) {
     st.sky.push({ x: Math.random() * st.w, y: 14 + Math.random() * 58, s: 0.5 + Math.random() })
@@ -1331,8 +1388,10 @@ function closeDetail() {
 }
 
 function goBack() {
-  if (window.history.length > 1) router.back()
-  else router.push({ name: 'space' })
+  // ★ 2026-10-29: 固定回「记忆空间」列表（验证报告 FIX04）。
+  //   原来优先 router.back()：从地址栏、分享链接或外部入口直接进房间时，
+  //   历史里的上一条是别的页面，「← 返回记忆空间」会把用户带到不相干的地方。
+  router.push({ name: 'space' })
 }
 
 onMounted(async () => {
@@ -1914,6 +1973,38 @@ onUnmounted(() => {
   font-weight: 700;
   letter-spacing: 1px;
   color: #4a3f37;
+}
+/* 错误页的两个动作：返回 / 重新加载 */
+.re-acts {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.re-btn {
+  padding: 9px 18px;
+  border: 1px solid rgba(160, 128, 99, 0.35);
+  border-radius: 999px;
+  background: #fff;
+  color: #8a6a4a;
+  font-size: 14px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+.re-btn:hover {
+  background: #f3e6d4;
+}
+.re-btn.primary {
+  border-color: transparent;
+  background: linear-gradient(135deg, #f7a58f, #e0705a);
+  color: #fff;
+  font-weight: 600;
+}
+.re-btn.primary:hover {
+  background: linear-gradient(135deg, #f09a82, #d4644e);
 }
 .re-sub {
   margin: 0 0 10px;

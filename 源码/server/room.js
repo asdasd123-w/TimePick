@@ -6,6 +6,7 @@
 //   3) 数据落库到 room_prop 表；删除记忆时由外键 CASCADE 连带删除。
 // 设计原则：本模块只做数据，不碰 HTTP 协议；所有入参都来自 index.js 的 handler。
 import db from './db.js'
+import { decideProp } from './propEmbed.js'
 
 const now = () => Date.now()
 
@@ -638,11 +639,8 @@ const STRONG_KEYWORDS = [
 // 在一段文本里找家具；命中返回家具名，没命中返回 null
 function matchFurnitureName(text) {
   // 1) 硬词：具体物件优先
-  for (const [furniture, words] of STRONG_KEYWORDS) {
-    for (const w of words) {
-      if (text.includes(w)) return furniture
-    }
-  }
+  const strong = matchStrongFurniture(text)
+  if (strong) return strong
   // 2) 抽象词：按命中次数投票，避免"排在前面的类别通吃"
   let best = null
   let bestHits = 0
@@ -657,6 +655,16 @@ function matchFurnitureName(text) {
     }
   }
   return best
+}
+
+/** 只扫「硬词」（具体物件名）—— 精确性最高的一层，媒体之后优先用它 */
+function matchStrongFurniture(text) {
+  for (const [furniture, words] of STRONG_KEYWORDS) {
+    for (const w of words) {
+      if (text.includes(w)) return furniture
+    }
+  }
+  return null
 }
 
 /**
@@ -698,11 +706,38 @@ function furnitureForMedia(mediaTypes) {
  *   ③ 都没命中 → 日记本 / 绿皮书 / 黄皮书 三选一（由 id 哈希决定，保证幂等）。
  */
 function ruleFurnitureForItem(item) {
+  // ① 已被「数据检索」判定过的（memory_item.prop_furniture）：直接沿用。
+  //    ★ 这一条是幂等性的关键 —— planSpace 是纯函数，而这个字段是落库的，
+  //      同一份 items 无论算多少次、重启多少次，结果都一样。检索（向量）本身是
+  //      异步的，不能塞进同步的 planSpace 里，所以先落库再规划。
+  const stored = String(item.prop_furniture || '')
+  if (FURNITURE_SET.has(stored) && !FIXED_FURNITURE.has(stored)) return stored
+  // ② 用户上传了照片/视频/音频 —— 这比任何文字线索都可信
   const media = furnitureForMedia(item.mediaTypes)
   if (media) return media
+  // ③ 字面检索（同步兜底：向量服务不可用、或检索还没跑过的老数据）
   const title = String(item.title || '').toLowerCase()
   const content = String(item.content || '').toLowerCase()
   return matchFurnitureName(title) || matchFurnitureName(content) || defaultFurnitureFor(item)
+}
+
+/**
+ * 异步版：媒体 > 硬词 > 向量+字面检索 > 兜底。
+ * 返回 { furniture, via, confident, score, hits } 或 null（null = 什么都没命中，走兜底本子）。
+ *
+ * 之所以要区分 confident：检索没把握时，有 DeepSeek 就再问一次大模型，
+ * 没把握又不问，就按兜底本子来 —— 不要让"半信半疑"的结果决定房间长什么样。
+ */
+async function decideItemProp(item) {
+  const media = furnitureForMedia(item.mediaTypes)
+  if (media) return { furniture: media, via: 'media', confident: true, score: 1, hits: [] }
+  const title = String(item.title || '')
+  const content = String(item.content || '')
+  const strong = matchStrongFurniture(`${title}\n${content}`.toLowerCase())
+  if (strong) return { furniture: strong, via: 'keyword', confident: true, score: 1, hits: [strong] }
+  const d = await decideProp(`${title} ${content}`.slice(0, 1200), { title })
+  if (d && FURNITURE_SET.has(d.furniture)) return d
+  return null
 }
 
 // 曾经有个「防重叠」函数（沿螺旋往外挪坐标），现在已经不需要了：
@@ -1053,7 +1088,7 @@ function writePlan(spaceId, uid, items, reason) {
 function spaceItems(spaceId) {
   const rows = db
     .prepare(
-      `SELECT i.id, i.title, i.content,
+      `SELECT i.id, i.title, i.content, i.prop_furniture,
               (SELECT GROUP_CONCAT(m.type) FROM memory_media m WHERE m.memory_id = i.id) AS media_types
          FROM memory_item i
         WHERE i.space_id = ?
@@ -1090,19 +1125,32 @@ export function replanByRule(spaceId, uid) {
 //   摆出来的房间和规则算的完全两样，且和同房间其它家具对不齐。
 export async function ensureRoomProp(uid, item) {
   const spaceId = item.space_id
-  if (DEEPSEEK_API_KEY) {
+  // ① 数据检索决定"这条记忆该是哪件物品"（媒体 > 硬词 > 向量+字面），落库后
+  //    planSpace 就是纯同步的了 —— 同一份数据怎么重算都不会变。
+  let decided = null
+  try {
+    const fresh = spaceItems(spaceId).find((it) => it.id === item.id) || item
+    decided = await decideItemProp(fresh)
+    if (decided?.furniture && FURNITURE_SET.has(decided.furniture)) {
+      db.prepare('UPDATE memory_item SET prop_furniture = ? WHERE id = ?').run(decided.furniture, item.id)
+    }
+  } catch (e) {
+    console.warn('[room/plan] 摆件检索失败, 走字面规则:', e.message)
+  }
+
+  // ② 检索没把握时，有 DeepSeek 就再问一次大模型（它比检索更会"理解"）。
+  //    以前是反过来：每次都先问 AI，慢且贵；现在检索先给出答案，只有含糊时才升级。
+  if (DEEPSEEK_API_KEY && (!decided || !decided.confident)) {
     try {
       const ai = await planRoomPropAI(item)
       if (ai && ai.furniture && FURNITURE_SET.has(ai.furniture)) {
-        // 只取家具类型，交给整间规划去摆
-        const items = spaceItems(spaceId).map((it) => (it.id === item.id ? { ...it, forced: ai.furniture } : it))
-        writePlan(spaceId, uid, items)
-        return db.prepare('SELECT * FROM room_prop WHERE item_id = ?').get(item.id)
+        db.prepare('UPDATE memory_item SET prop_furniture = ? WHERE id = ?').run(ai.furniture, item.id)
       }
     } catch (e) {
       console.warn('[room/plan] AI 选家具失败, 走规则:', e.message)
     }
   }
+
   replanByRule(spaceId, uid)
   return db.prepare('SELECT * FROM room_prop WHERE item_id = ?').get(item.id)
 }
@@ -1112,8 +1160,77 @@ export function removeRoomProp(itemId) {
   db.prepare('DELETE FROM room_prop WHERE item_id = ?').run(itemId)
 }
 
+/**
+ * 存量补全：给还没有 prop_furniture 的老记忆跑一遍检索并落库（启动时后台执行）。
+ *
+ * 为什么需要它：检索是这次新加的，老数据这一列全是空串，planSpace 只能走老的字面规则 ——
+ * 不补的话「语义检索」只对新写的记忆生效，用户翻旧房间看不出任何变化。
+ * 为什么放后台：要调向量接口，绝不能挡住启动；失败也只是没补上，不影响任何功能。
+ * 幂等：只处理空串的行，跑完再跑就是空转。
+ */
+export async function backfillPropFurniture(limit = 400) {
+  const rows = db
+    .prepare(
+      `SELECT i.id, i.space_id, i.title, i.content
+         FROM memory_item i
+        WHERE (i.prop_furniture IS NULL OR i.prop_furniture = '')
+        ORDER BY i.id LIMIT ?`,
+    )
+    .all(limit)
+  if (!rows.length) return { items: 0, changed: 0, spaces: 0 }
+  const spaces = new Set()
+  let done = 0
+  for (const it of rows) {
+    const mediaTypes = new Set(
+      String(
+        db
+          .prepare('SELECT GROUP_CONCAT(type) t FROM memory_media WHERE memory_id = ?')
+          .get(it.id)?.t || '',
+      )
+        .split(',')
+        .map(Number)
+        .filter((n) => Number.isFinite(n) && n > 0),
+    )
+    try {
+      const d = await decideItemProp({ ...it, mediaTypes })
+      if (d?.furniture && FURNITURE_SET.has(d.furniture)) {
+        db.prepare('UPDATE memory_item SET prop_furniture = ? WHERE id = ?').run(d.furniture, it.id)
+        spaces.add(it.space_id)
+        done++
+      }
+    } catch (e) {
+      console.warn('[room/prop] 补检索失败(跳过该条):', e.message)
+    }
+  }
+  // 逐空间重排一次（planSpace 会读新写进去的 prop_furniture）
+  let changed = 0
+  for (const spaceId of spaces) {
+    const before = new Map(
+      db.prepare('SELECT item_id, furniture FROM room_prop WHERE space_id = ?').all(spaceId).map((p) => [p.item_id, p.furniture]),
+    )
+    replanByRule(spaceId, null)
+    for (const p of db.prepare('SELECT item_id, furniture FROM room_prop WHERE space_id = ?').all(spaceId)) {
+      if (before.has(p.item_id) && before.get(p.item_id) !== p.furniture) changed++
+    }
+  }
+  return { items: done, changed, spaces: spaces.size }
+}
+
 // 重新规划整个空间的摆件（手动「重排」用，ai/room/plan 触发）
+// ★ 重排 = 重新检索每一件物品，所以这里必须逐条重跑检索（而不是沿用库里的结论），
+//   否则用户按了「重排」却发现家具一件没变，会以为按钮坏了。
 export async function replanSpace(uid, spaceId) {
+  const items = spaceItems(spaceId)
+  for (const it of items) {
+    try {
+      const d = await decideItemProp(it)
+      if (d?.furniture && FURNITURE_SET.has(d.furniture)) {
+        db.prepare('UPDATE memory_item SET prop_furniture = ? WHERE id = ?').run(d.furniture, it.id)
+      }
+    } catch (e) {
+      console.warn('[room/plan] 重排检索失败(该条走字面规则):', e.message)
+    }
+  }
   replanByRule(spaceId, uid)
   return db.prepare('SELECT * FROM room_prop WHERE space_id = ? ORDER BY id').all(spaceId)
 }

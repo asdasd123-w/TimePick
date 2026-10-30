@@ -103,6 +103,16 @@
                   </select>
                   <input v-model="item._note" class="item-input" placeholder="处理备注..." />
                   <button class="item-btn save" type="button" @click="updateReport(item)">保存</button>
+                  <!-- 下架：把被举报内容撤下来 + 私信通知双方（2026-10-29 需求） -->
+                  <button
+                    v-if="item.target_type !== 3"
+                    class="item-btn down"
+                    type="button"
+                    :disabled="item._downing"
+                    @click="takeDownReport(item)"
+                  >
+                    {{ item._downing ? '处理中…' : '下架并通知' }}
+                  </button>
                   <button class="item-btn del" type="button" @click="confirmDelete('report', item.id)">删除</button>
                 </div>
               </div>
@@ -230,10 +240,11 @@
                   <span class="item-user" style="color: #8a7a6d">{{ item.nickname }}</span>
                   <span class="item-date">{{ fmtDate(item.created_at) }}</span>
                 </div>
-                <!-- 密码: 注册/改密时服务端另存了一份可逆密文, 这里显示真实密码; 老账号下次登录后可见 -->
+                <!-- ★ 2026-10-29: 口令不再显示（验证报告 FIND-02）。
+                     服务端现在只回 has_password，明文彻底不出网；需要时用右侧「重置」。 -->
                 <div class="item-pwd-row">
                   <span class="item-pwd-label">密码</span>
-                  <code class="item-pwd" :title="item.password || ''">{{ pwdBrief(item.password) }}</code>
+                  <code class="item-pwd">{{ item.has_password ? '已设置 · 出于安全不显示' : '未设置' }}</code>
                   <button
                     class="item-btn"
                     type="button"
@@ -730,11 +741,7 @@ const resetPwd = reactive({
 })
 
 // 列表里显示真实密码; 太长就截一段, 完整值放在 title 里
-function pwdBrief(p) {
-  const s = String(p || '')
-  if (!s) return '(未记录·该用户下次登录后可见)'
-  return s.length > 22 ? `${s.slice(0, 22)}…` : s
-}
+// pwdBrief 已删除（2026-10-29）：服务端不再下发口令，界面只显示「已设置/未设置」
 
 // 随机新密码: 去掉 0/O/1/l/I 等易混字符
 function randomPwd() {
@@ -1013,6 +1020,29 @@ async function updateReport(item) {
     showToast('保存失败，请重试', 'error')
   }
 }
+// 下架被举报内容 + 以「拾光管理员」身份私信通知举报人和被举报人（2026-10-29）
+// 走 confirmModal 二次确认：这个动作会把记忆取消公开，用户自己的分享状态跟着变，
+// 不是"改个状态码"那么轻。
+function takeDownReport(item) {
+  confirmModal.show = true
+  confirmModal.title = '下架这条内容'
+  confirmModal.message =
+    '下架后：这条记忆会取消公开、从广场消失；系统会以「拾光管理员」名义私信通知举报人和被举报人，并附上处理备注。确定继续吗？'
+  confirmModal.action = async () => {
+    item._downing = true
+    try {
+      const r = await cloudApi.adminTakedownReport({ id: item.id, note: item._note || '' })
+      const n = (r?.notified || []).length
+      showToast(`已下架${n ? `，已通知 ${n} 人` : ''}`)
+      await loadReports()
+    } catch (e) {
+      showToast(e.message || '下架失败，请重试', 'error')
+    } finally {
+      item._downing = false
+    }
+  }
+}
+
 // 打开举报详情: 拉取举报对象(帖子/评论/用户)的实际内容
 async function openReportDetail(item) {
   rpDetail.show = true
@@ -1387,7 +1417,9 @@ onMounted(() => {
   width: 80%;
   height: 78%;
   padding: 28px 32px;
-  background: rgba(255, 252, 248, 0.92);
+  /* 必须完全不透明：背景图在卡片上沿附近烘焙着「个人中心 ♡」的字，
+     只要留一点透明度（0.92 / 0.97 都试过）残影就会从卡片里透出来。 */
+  background: #fffcf8;
   border-radius: 18px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
   display: flex;
@@ -1847,6 +1879,18 @@ onMounted(() => {
 .item-btn.save {
   background: #f0917c;
   color: #fff;
+}
+
+/* 下架：比"保存"更重、比"删除"更轻 —— 砖红实心，让人意识到这是不可逆的处置 */
+.item-btn.down {
+  background: #c0503f;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.item-btn.down:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .item-btn.del {

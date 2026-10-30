@@ -1,7 +1,7 @@
 <template>
   <!-- 回忆详情子组件: 完整内容 + 评论区 -->
   <div class="md-mask" @click.self="$emit('close')">
-    <div class="md-card" :style="mdDragStyle">
+    <div class="md-card" :style="mdDragStyle" role="dialog" aria-modal="true" aria-label="记忆详情">
       <div class="md-head" @pointerdown="onMdDragStart">
         <span class="md-ava" :style="avaStyle(post.name)">
           <img class="md-ava-img" :src="avatarOf(post)" alt="" />
@@ -11,7 +11,9 @@
           <!-- 有来源才写"来自"，否则会留下一个空荡荡的"来自 " -->
           <span>{{ post.time }}<template v-if="post.from"> · 来自 {{ post.from }}</template></span>
         </div>
-        <button class="md-close" type="button" aria-label="关闭" @click="$emit('close')">×</button>
+        <button ref="closeBtn" class="md-close" type="button" aria-label="关闭" @click="$emit('close')">
+          ×
+        </button>
       </div>
 
       <div class="md-body">
@@ -68,7 +70,7 @@
 
 <script setup>
 // 回忆详情子组件: 展示该条记忆的完整内容与评论区
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 // ★ 2026-10-27 用户要求：广场详情里作者这里要显示头像（原来是"名字首字 + 渐变块"）
 import { avatarOf } from '@/data/avatar'
 
@@ -79,6 +81,32 @@ const props = defineProps({
 const emit = defineEmits(['close', 'add-comment'])
 
 const input = ref('')
+
+// ★ 2026-10-29 键盘可访问性（对应验证报告 FIX02）：
+//   以前弹层没有 dialog 语义、Esc 关不掉、焦点还停在三维画布/原卡片上。
+//   现在打开时把焦点放到关闭按钮，Esc 关闭，关闭后把焦点还给打开它的入口。
+const closeBtn = ref(null)
+let lastActive = null
+
+function onKeydown(e) {
+  if (e.key !== 'Escape' && e.key !== 'Esc') return
+  // 原生音视频控件自己会吃掉 Esc（退出全屏/停止播放），这时不应该顺手把弹层关掉
+  const t = e.target
+  if (t && t.closest && t.closest('audio, video')) return
+  e.stopPropagation()
+  emit('close')
+}
+
+onMounted(() => {
+  lastActive = document.activeElement
+  document.addEventListener('keydown', onKeydown)
+  nextTick(() => closeBtn.value && closeBtn.value.focus())
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown)
+  if (lastActive && lastActive.focus && document.contains(lastActive)) lastActive.focus()
+})
 
 // 详情卡片拖动: 按住头部平移(点关闭按钮不触发); 组件每次打开都会重新挂载, 无需重置
 const mdDrag = ref({ x: 0, y: 0 })

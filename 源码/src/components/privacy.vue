@@ -1,6 +1,6 @@
 <template>
   <div class="privacy">
-    <div class="privacy-figure" :style="{ '--pv-bg': `url(${PAGE_BG})` }">
+    <div class="privacy-figure" :style="{ '--pv-bg': `url(${PAGE_BG})`, '--pv-bg-blur': `url(${PAGE_BG_BLUR})` }">
       <div class="privacy-figure-inner">
         <!-- 手机端标题（≤767 才显示）：海报上的标题是画进图片里的，竖屏裁成顶条后会丢掉 -->
         <header class="pv-m-head">
@@ -56,7 +56,7 @@
         <section class="pv-card card-2">
           <div class="card-head"><b>AI 与记忆权限</b></div>
           <p class="card-desc">你可以控制拾光 AI 能够读取和使用哪些内容。</p>
-          <div class="card-body">
+          <div ref="aiBody" class="card-body" :class="{ 'is-scroll': aiScroll }">
             <div v-for="(a, i) in aiPerms" :key="a.title" class="ai-row">
               <i class="ai-ico"></i>
               <span class="ai-text">
@@ -72,6 +72,7 @@
               ></button>
             </div>
           </div>
+          <span v-if="aiScroll" class="card-more">⌄ 向下滚动看全部 {{ aiPerms.length }} 项</span>
         </section>
 
         <!-- 卡3: 分享管理 -->
@@ -184,11 +185,17 @@
 
 <script setup>
 // 隐私设置: 新背景四张白卡(标题/图标/便签已烘焙), 文字内容叠加, 超出可滚动
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { cloudApi } from '@/api/cloud'
 import { useCloudAuthStore } from '@/stores/cloudAuth'
 // ★ 2026-10-27：背景图在 CSS 里也要用一份（铺满用的模糊垫底层），所以显式 import 拿 URL
 import PAGE_BG from '@/assets/opt/privacyBackground.webp'
+// ★ 2026-10-29：铺满用的垫底层不再在运行时打 filter: blur(26px)，改用「同一张图预烘焙的
+//   96×63 模糊小图」（0.4KB）。原因：整屏大小的 filter 层在 macOS 上会命中合成器分块
+//   （tile）渲染，用户那边看到一条横贯屏幕的绿色细线（虚拟机上拍屏可见，宽/高都跟着视口变）。
+//   换成预烘焙的模糊底图后这一层没有任何滤镜，分块伪影不再可能出现，GPU 开销也从
+//   "一整屏 26px 高斯" 降到 "一张 0.4KB 图放大"。上方那张 sharp 的 contain 图完全没动。
+import PAGE_BG_BLUR from '@/assets/opt/privacyBackground-blur.webp'
 import { islandSpriteStyle, DEFAULT_ART } from '@/data/islands'
 
 const auth = useCloudAuthStore()
@@ -416,11 +423,34 @@ function toast(text) {
   }, 2200)
 }
 
+// ---- 「AI 与记忆权限」内容是否需要滚动（对应验证报告 FIND-05）----
+// 卡片高度是烘焙在背景图里的，改不了；行距已经压到最紧，矮一点的屏仍可能装不下
+// 第四项。这里实测一下，只有真的溢出时才加底部渐隐和「向下滚动」提示，
+// 避免用户误以为这一卡只有三项设置。
+const aiBody = ref(null)
+const aiScroll = ref(false)
+
+function measureAiScroll() {
+  const el = aiBody.value
+  if (!el) return
+  aiScroll.value = el.scrollHeight > el.clientHeight + 2
+}
+
+function onResize() {
+  measureAiScroll()
+}
+
 onMounted(() => {
   loadSettings()
   loadShares()
   loadSpaceArts()
+  // 等字体/布局落定再量一次，不然量到的是还没换行的高度
+  setTimeout(measureAiScroll, 60)
+  setTimeout(measureAiScroll, 600)
+  window.addEventListener('resize', onResize)
 })
+
+onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 </script>
 
 <style scoped>
@@ -452,11 +482,14 @@ onMounted(() => {
   content: '';
   position: absolute;
   inset: -40px;
-  background-image: var(--pv-bg, none);
+  /* 预烘焙的模糊底图（同一张图缩到 96×63 后直接画进文件里），这里不做任何 filter：
+     整屏 filter 层在 macOS 上会出现合成器分块接缝（用户拍屏看到一条绿色细线）。 */
+  background-image: var(--pv-bg-blur, none);
   background-size: cover;
   background-position: center;
-  filter: blur(26px) saturate(1.06);
-  opacity: 0.96;
+  background-repeat: no-repeat;
+  /* 老浏览器（不支持新图/变量时为 none）仍能靠底色兜住，不至于出现透明洞 */
+  background-color: #e6d9c9;
   pointer-events: none;
 }
 
@@ -506,13 +539,31 @@ onMounted(() => {
 .card-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
   flex: 1;
   min-height: 0;
-  margin-top: 12px;
+  /* ★ 2026-10-29: 12 → 8。卡片高度是烘焙在图里的、改不了，只能从内容侧挤出空间，
+     让「AI 与记忆权限」的第四项尽量不用滚动就能看到（验证报告 FIND-05）。 */
+  margin-top: 8px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #d8c4b4 transparent;
+}
+
+/* 内容仍然放不下时（更矮的屏），底部渐隐 + 右下角「向下滚动」提示，
+   别让用户以为这一卡只有三项设置。由脚本量 scrollHeight 后加 is-scroll 才生效。 */
+.card-body.is-scroll {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 20px), transparent 100%);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 20px), transparent 100%);
+}
+.card-more {
+  position: absolute;
+  right: 14px;
+  bottom: 6px;
+  font-size: 11px;
+  color: #a89a8c;
+  letter-spacing: 0.5px;
+  pointer-events: none;
 }
 
 .card-body::-webkit-scrollbar {
@@ -658,7 +709,8 @@ onMounted(() => {
   gap: 8px;
   width: 76%;
   margin: 0 auto;
-  padding: 7px 10px;
+  /* ★ 2026-10-29: 上下内边距 7 → 2、行距同步收紧，四行才装得进烘焙好的卡片高度 */
+  padding: 2px 10px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.5);
 }
@@ -676,17 +728,19 @@ onMounted(() => {
 .ai-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   min-width: 0;
 }
 
 .ai-text b {
-  font-size: 14.5px;
+  font-size: 13.5px;
+  line-height: 1.3;
   color: #4a4038;
 }
 
 .ai-text span {
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.3;
   color: #9a8f83;
 }
 

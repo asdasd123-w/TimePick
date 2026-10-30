@@ -17,9 +17,14 @@ import {
   getRoomLayout,
   replanSpace,
   repairLegacyRoomProps,
+  backfillPropFurniture,
   MAX_ITEMS_PER_SPACE,
   remainingCapacity,
 } from './room.js'
+// 3D 摆件的「数据检索」（向量 + 字面）：决定一条记忆在房间里变成哪件物品
+import { setEmbeddingKeyGetter, warmupProps, decideProp } from './propEmbed.js'
+import { semanticSearchMemory } from './memorySearch.js'
+import { searchProps } from './propSearch.js'
 import {
   now,
   hashPassword,
@@ -28,7 +33,6 @@ import {
   signToken,
   verifyToken,
   encryptPassword,
-  decryptPassword,
 } from './util.js'
 // 微信扫码登录: 服务端拿云服务的 accessToken 向云端核实身份, 再映射到本地账号
 import { attestedCloudUid, ensureWechatUser, resolveCloudUid } from './wechat-auth.js'
@@ -108,6 +112,8 @@ function maskKey(v) {
 const keyDeepseek = () => aiKey('deepseek')
 const keyZhipu = () => aiKey('zhipu')
 const keyDashscope = () => aiKey('dashscope')
+// 3D 摆件检索用的向量模型跟 DashScope 共用一个密钥（后台改了立即生效）
+setEmbeddingKeyGetter(() => keyDashscope())
 // 只有超级管理员能管理密钥: 其他管理员连"有没有配"都不给看完整信息
 function mustSuperAdmin(uid) {
   const u = isAdmin(uid)
@@ -116,6 +122,12 @@ function mustSuperAdmin(uid) {
 }
 // 视频比生图贵一个数量级, 单独按人按天限流
 const AI_DAILY_VIDEO_LIMIT = Number(process.env.AI_DAILY_VIDEO_LIMIT ?? 10)
+// 小猫说话（TTS）按字数计费，一天一个人的上限；一次最多念这么长
+const AI_DAILY_TTS_LIMIT = Number(process.env.AI_DAILY_TTS_LIMIT ?? 400)
+const TTS_MODEL = process.env.DASHSCOPE_TTS_MODEL || 'qwen3-tts-flash'
+// Cherry 是偏甜的女声，抬高一点音调就像小猫；换嗓子改环境变量即可
+const TTS_VOICE = process.env.DASHSCOPE_TTS_VOICE || 'Cherry'
+const TTS_MAX_LEN = 300
 // 把记忆转成「画面描述」的系统提示词: DeepSeek 负责这一步, 输出直接喂给文生图模型
 const COVER_PROMPT_SYSTEM =
   '你是记忆封面的画面描述专家。根据用户提供的记忆标题与正文, 写一句用于文生图模型的英文画面描述。' +
@@ -155,6 +167,11 @@ fs.mkdirSync(videosDir, { recursive: true })
 // 用户上传的背景音乐, 经 /uploads/bgm/xxx 静态访问
 const bgmDir = path.join(uploadsDir, 'bgm')
 fs.mkdirSync(bgmDir, { recursive: true })
+// ★ 小猫语音（TTS）合成结果, 经 /uploads/tts/xxx.wav 静态访问。
+//   必须转存到本地：DashScope 返回的 OSS 链接带签名、24 小时后失效，
+//   直接存那个 URL 的话，用户第二天翻聊天记录就听不到声音了。
+const ttsDir = path.join(uploadsDir, 'tts')
+fs.mkdirSync(ttsDir, { recursive: true })
 const app = express()
 // 上传背景音乐走 base64 dataUrl, 音频限 10MB -> base64 约 13.4MB, 留余量
 // 64mb: 视频以 dataURL(base64) 上传, 40MB 视频编码后约 53MB, 原 16mb 会被 413 拒掉
@@ -260,6 +277,40 @@ const PM_MAX_LEN = Number(process.env.PM_MAX_LEN ?? 500)
 const PM_RATE_PER_MIN = Number(process.env.PM_RATE_PER_MIN ?? 20)
 // 单次会话拉取的历史条数上限(从最新往回取), 避免老对话把响应撑大
 const PM_THREAD_LIMIT = 200
+
+/**
+ * 系统私信的匿名化（2026-10-29）。
+ *
+ * 管理员处理举报后要私信举报人和被举报人，但**不能暴露是哪个管理员**：
+ * 库里记真实 sender_id（便于审计），出网前统一改名 + 把 id 抹成 0。
+ * ★ 只抹 id 不抹名字是不够的 —— 隐私设置页/广场都能看到用户 id 与昵称的对应关系，
+ *   留着 sender_id 等于把管理员身份直接告诉被举报人。
+ */
+function maskSystemPm(rows) {
+  for (const m of Array.isArray(rows) ? rows : [rows]) {
+    if (!m || !m.sender_label) continue
+    m.sender_nickname = m.sender_label
+    m.sender_username = ''
+    m.sender_id = 0
+    m.is_system = 1
+  }
+  return rows
+}
+
+/** 以「拾光管理员」名义发一条私信（真实发信人只留在库里做审计，出网即匿名） */
+function sendSystemPm(adminUid, receiverId, content) {
+  const to = Number(receiverId) || 0
+  if (!to || to === Number(adminUid)) return false
+  const text = String(content || '').trim()
+  if (!text) return false
+  db.prepare(
+    `INSERT INTO private_message (sender_id, receiver_id, content, sender_label, created_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(Number(adminUid), to, text.slice(0, PM_MAX_LEN), '拾光管理员', now())
+  return true
+}
+
+
 const quotaUsed = new Map()
 // 按「本地日期」分桶, 跨天自动失效
 function todayKey() {
@@ -1176,6 +1227,56 @@ const handlers = {
     return { text }
   },
 
+  // ---------- AI 语音合成：小橘开口说话 ----------
+  // 前端把要念的文字发过来，这里调 DashScope qwen3-tts 合成 wav，**转存到本地**后
+  // 回一个 /uploads/tts/xxx.wav。不直接回第三方 URL 的原因：
+  //   ① 那个链接带签名，24h 后失效，聊天记录里的小猫第二天就哑了；
+  //   ② 外面域名在部分网络下加载很慢，语音要「立刻出声」才有对话感。
+  // 同一句话（同一把嗓子）只合成一次，命中缓存直接回 —— 反复回放不花钱。
+  'ai/tts': async (p, uid, req) => {
+    // ★ 2026-10-29：一句回答会拆成「首句 + 长尾」两次合成（首句先出声，见 aiCompanion 的
+    //   splitSpeak），每次对话的调用数翻倍，所以窗口内允许次数从 20 提到 60。
+    guard(req, 'ai/tts', 60, 60_000, '小猫说话太快了，让它喘口气')
+    if (!uid) throw err('请先登录后再和小橘说话')
+    // 和 ai/chat 同一道闸门：能聊才该能听（管理员关了 AI 的用户不该还在烧语音额度）
+    if (!aiAllowed(uid, 'reply')) throw err('AI 对话功能已被管理员限制, 如有疑问请联系管理员')
+    if (!keyDashscope()) throw err('服务端未配置语音合成密钥(DASHSCOPE_API_KEY)')
+    if (!takeQuota('tts', uid, AI_DAILY_TTS_LIMIT)) throw err('今天和小橘说话说得够多啦，明天再聊')
+    // 念出来的内容要短：三五百字的回复念起来像听书，不像聊天
+    const text = String(p.text ?? '')
+      .replace(/[\r\n\t]+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+      .slice(0, TTS_MAX_LEN)
+    if (!text) throw err('没有要说的内容')
+    const voice = String(p.voice || '').trim() || TTS_VOICE
+    const file = crypto.createHash('sha1').update(`${TTS_MODEL}|${voice}|${text}`).digest('hex').slice(0, 24)
+    const abs = path.join(ttsDir, `${file}.wav`)
+    const url = `/uploads/tts/${file}.wav`
+    if (fs.existsSync(abs) && fs.statSync(abs).size > 1024) return { url, voice, cached: true }
+
+    const res = await fetch(`${DASHSCOPE_BASE_URL}/api/v1/services/aigc/multimodal-generation/generation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${keyDashscope()}` },
+      body: JSON.stringify({
+        model: TTS_MODEL,
+        input: { text, voice, language_type: 'Chinese' },
+      }),
+      signal: AbortSignal.timeout(30_000),
+    })
+    const j = await res.json().catch(() => null)
+    if (!res.ok || !j) throw err(`语音合成服务异常(${res.status})`)
+    const src = j?.output?.audio?.url
+    if (!src) throw err(j?.message || j?.output?.audio?.data || '语音合成失败，稍后再试')
+    // 下载到本地（限制体积，防止异常大文件写满磁盘）
+    const bin = await fetch(src, { signal: AbortSignal.timeout(30_000) })
+    if (!bin.ok) throw err(`语音下载失败(${bin.status})`)
+    const buf = Buffer.from(await bin.arrayBuffer())
+    if (!buf.length || buf.length > 6 * 1024 * 1024) throw err('语音文件异常，稍后再试')
+    fs.writeFileSync(abs, buf)
+    return { url, voice, cached: false }
+  },
+
   // ---------- AI 记忆封面: DeepSeek 扩写画面描述 -> 智谱文生图 -> 转存到本地 ----------
   'ai/cover': async (p, uid, req) => {
     guard(req, 'ai/cover', 10, 60_000, '封面生成过于频繁, 请稍后再试')
@@ -1939,6 +2040,24 @@ const handlers = {
       )
       .get(p.id)
   },
+  // ---------------------------------------------------------------------------
+  // 记忆的语义搜索：给一句话，返回「意思相近」的记忆 id 集合
+  //
+  // 为什么单独开接口而不是把向量塞进 memory/item/list：
+  //   列表接口是页面首屏要用的，必须快；向量检索每条记忆都要算/查向量，
+  //   放在列表里等于让所有人打开记忆库都等 1 秒。前端只在**字面搜不到**时才来问这里。
+  // 返回 disabled:true = 没配密钥/额度用尽，前端照常显示「没有找到」。
+  // ---------------------------------------------------------------------------
+  'memory/semantic-search': async (p, uid, req) => {
+    guard(req, 'memory/semantic', 40, 60_000, '搜索太频繁了，喘口气再搜')
+    if (!uid) throw err('请先登录')
+    const q = String(p.q || '').trim()
+    if (q.length < 2) return { ids: [], scored: [], disabled: false }
+    const r = await semanticSearchMemory(uid, q)
+    if (!r) return { ids: [], scored: [], disabled: true }
+    return { ...r, disabled: false }
+  },
+
   'memory/item/list': (p, uid) => {
     const space = getSpace(p.space_id)
     if (!space) throw err('记忆空间不存在')
@@ -2151,6 +2270,19 @@ const handlers = {
     if (!space) throw err('记忆空间不存在')
     if (space.user_id !== uid) throw err('只能查看自己的记忆空间')
     return getRoomLayout(p.space_id, uid).gallery
+  },
+  // 摆件检索调试/解释接口：给一段文字，返回"最像哪件 3D 物品"。
+  // 房间里的物品不是随机的 —— 这条接口就是把"为什么是它"摊开给人看（也方便回归测试）。
+  'room/prop/search': async (p, uid, req) => {
+    guard(req, 'room/prop/search', 30, 60_000, '检索太频繁，请稍后再试')
+    if (!uid) throw err('请先登录后再检索')
+    const text = String(p.text ?? '').slice(0, 2000)
+    if (!text.trim()) throw err('请先写点什么')
+    const title = String(p.title ?? '')
+    return {
+      lexical: searchProps(text, { title, limit: 3 }),
+      decision: await decideProp(text, { title }),
+    }
   },
   // 手动「重排」本空间摆件（AI 重新识别每条记忆并摆放）；无密钥时退回规则。
   'ai/room/plan': async (p, uid) => {
@@ -2886,6 +3018,96 @@ const handlers = {
     return { removed: true }
   },
 
+  /**
+   * 处理举报 = 下架被举报内容 + 以「拾光管理员」身份私信通知双方（2026-10-29 新需求）。
+   *
+   * 为什么"下架"要落到记忆上：广场动态只是记忆的投影（square_post.memory_id），
+   * 用户自己点「取消分享」走的也是这条路（is_public=0 + unprojectMemory）。
+   * 如果只把 square_post.is_public 置 0，记忆还在"已分享"状态，下次启动
+   * backfillSquareProjections() 会把它重新投影回广场 —— 等于下架无效。
+   *
+   * 通知为什么要私信：用户不一定回来看举报页；私信双方（举报人收到处理结果、
+   * 被举报人收到下架理由）才是闭环。发信人匿名成「拾光管理员」。
+   */
+  'admin/report/takedown': (p) => {
+    isAdmin(p._uid)
+    const r = db.prepare('SELECT * FROM report WHERE id = ?').get(p.id)
+    if (!r) throw err('举报不存在')
+    const note = String(p.note ?? '').trim() || '违反社区规范'
+    const t = now()
+    const type = Number(r.target_type)
+
+    // ① 定位被举报的动态：评论先找所属动态，找不到就按帖子 id 兜底
+    //   （历史数据把帖子举报存成评论类型，detail 接口里也有同样的兜底）
+    let post = null
+    if (type === 2) {
+      const c = db.prepare('SELECT post_id FROM post_comment WHERE id = ?').get(r.target_id)
+      if (c) post = db.prepare('SELECT * FROM square_post WHERE id = ?').get(c.post_id)
+    }
+    if (!post) post = db.prepare('SELECT * FROM square_post WHERE id = ?').get(r.target_id) || null
+
+    // ② 下架：有对应记忆就按「取消分享」处理，没有就只把动态本身置为不可见
+    let memoryId = 0
+    let title = ''
+    let authorId = 0
+    if (post) {
+      memoryId = Number(post.memory_id) || 0
+      authorId = Number(post.user_id) || 0
+      if (memoryId) {
+        const m = db.prepare('SELECT id, title, content, space_id FROM memory_item WHERE id = ?').get(memoryId)
+        if (m) {
+          title = String(m.title || '').trim()
+          if (!title) title = String(m.content || '').trim().split('\n')[0].slice(0, 24)
+          db.prepare('UPDATE memory_item SET is_public = 0, shared_at = 0, updated_at = ? WHERE id = ?').run(t, memoryId)
+          unprojectMemory(memoryId)
+        }
+      }
+      // 兜底：投影不存在的动态也必须下架（否则还在广场列表里）
+      db.prepare('UPDATE square_post SET is_public = 0, updated_at = ? WHERE id = ?').run(t, post.id)
+      if (!title) title = String(post.content || '').trim().split('\n')[0].slice(0, 24) || `动态 #${post.id}`
+    } else if (type === 3) {
+      authorId = Number(r.target_id) || 0
+      const u = db.prepare('SELECT username, nickname FROM user WHERE id = ?').get(authorId)
+      title = u ? u.nickname || u.username : `用户 #${authorId}`
+    }
+
+    if (type === 3) {
+      // 用户举报不做自动处置（禁言/封号要人工判断），只记处理意见并发通知
+      db.prepare('UPDATE report SET status = 1, handle_note = ?, updated_at = ? WHERE id = ?').run(note, t, p.id)
+    } else {
+      db.prepare('UPDATE report SET status = 1, handle_note = ?, updated_at = ? WHERE id = ?').run(
+        note ? `${note}（内容已下架）` : '内容已下架',
+        t,
+        p.id,
+      )
+    }
+
+    // ③ 私信举报人：告诉他处理结果（不透露被举报人信息）
+    const notified = []
+    if (r.reporter_id) {
+      const ok = sendSystemPm(
+        p._uid,
+        r.reporter_id,
+        type === 3
+          ? `你举报的用户已核实处理。处理说明：${note}。感谢你一起守护拾光。`
+          : `你举报的内容已核实处理：「${title}」已下架。处理说明：${note}。感谢你一起守护拾光。`,
+      )
+      if (ok) notified.push(Number(r.reporter_id))
+    }
+    // ④ 私信被举报人：告诉他为什么被下架（匿名管理员署名，可直接回复）
+    //    用户举报只做记录、不自动处置，所以不在这里通知当事人
+    if (authorId && type !== 3) {
+      const ok = sendSystemPm(
+        p._uid,
+        authorId,
+        `你发布的「${title}」被举报后经核实已下架。处理说明：${note}。如果你有不同意见，可以直接回复这条私信说明情况。`,
+      )
+      if (ok) notified.push(authorId)
+    }
+
+    return { taken: true, type, post_id: post?.id || 0, memory_id: memoryId, title, notified }
+  },
+
   // 活动管理
   'admin/activity/list': (p) => {
     isAdmin(p._uid)
@@ -3107,8 +3329,20 @@ const handlers = {
 
   // 私信
   'pm/send': (p, uid) => {
-    if (!p.receiver_id) throw err('接收人不能为空')
-    const receiverId = Number(p.receiver_id)
+    // ★ receiver_id=0 是「回复拾光管理员」：管理员私信是匿名的，前端拿到的是 0，
+    //   这里翻译成最近那条系统私信的真实发信人，用户仍然能回话（但看不到是谁）。
+    let receiverId = Number(p.receiver_id)
+    if (receiverId === 0) {
+      const last = db
+        .prepare(
+          `SELECT sender_id FROM private_message
+            WHERE receiver_id = ? AND sender_label <> '' ORDER BY id DESC LIMIT 1`
+        )
+        .get(uid)
+      if (!last) throw err('接收人不能为空')
+      receiverId = last.sender_id
+    }
+    if (!p.receiver_id && !receiverId) throw err('接收人不能为空')
     if (!Number.isInteger(receiverId) || receiverId <= 0) throw err('接收人不存在')
     if (receiverId === uid) throw err('不能给自己发私信')
     const content = String(p.content ?? '').trim()
@@ -3130,19 +3364,25 @@ const handlers = {
     const otherId = Number(p.user_id) || 0
     if (!otherId || otherId === uid) {
       // 获取所有消息（最近 50 条）
-      return db.prepare(
-        `SELECT pm.*, s.username AS sender_username, s.nickname AS sender_nickname,
+      return maskSystemPm(
+        db
+          .prepare(
+            `SELECT pm.*, s.username AS sender_username, s.nickname AS sender_nickname,
                 r.username AS receiver_username, r.nickname AS receiver_nickname
          FROM private_message pm
          LEFT JOIN user s ON s.id = pm.sender_id
          LEFT JOIN user r ON r.id = pm.receiver_id
          WHERE pm.sender_id = ? OR pm.receiver_id = ?
-         ORDER BY pm.created_at DESC, pm.id DESC LIMIT 50`
-      ).all(uid, uid)
+         ORDER BY pm.created_at DESC, pm.id DESC LIMIT 50`,
+          )
+          .all(uid, uid),
+      )
     }
     // 获取与特定用户的对话: 取最近 N 条再按时间正序输出, 长对话不会把响应撑大
-    return db.prepare(
-      `SELECT * FROM (
+    return maskSystemPm(
+      db
+        .prepare(
+          `SELECT * FROM (
          SELECT pm.*, s.username AS sender_username, s.nickname AS sender_nickname,
                 r.username AS receiver_username, r.nickname AS receiver_nickname
          FROM private_message pm
@@ -3151,8 +3391,10 @@ const handlers = {
          WHERE (pm.sender_id = ? AND pm.receiver_id = ?) OR (pm.sender_id = ? AND pm.receiver_id = ?)
          ORDER BY pm.created_at DESC, pm.id DESC
          LIMIT ${PM_THREAD_LIMIT}
-       ) ORDER BY created_at ASC, id ASC`
-    ).all(uid, otherId, otherId, uid)
+       ) ORDER BY created_at ASC, id ASC`,
+        )
+        .all(uid, otherId, otherId, uid),
+    )
   },
   'pm/markRead': (p, uid) => {
     // 标记某人发来的消息为已读，user_id=0 表示标记所有为已读
@@ -3186,30 +3428,23 @@ const handlers = {
 
 
   // 用户管理
-  // password 字段返回的是「真实密码」: 注册/改密时另存了一份 AES-256-GCM 密文(password_enc),
-  // 这里解密后下发(仅管理员可调本接口)。历史账号在下次登录时会自动补存密文;
-  // 一直没登录过的老账号解不出明文, 显示提示文案。
+  // ★ 2026-10-29 安全修复（对应验证报告 FIND-02，P2）：本接口不再返回任何口令内容。
+  //   以前 decryptPassword() 之后把**明文口令**回给前端，任何管理员打开「用户管理」
+  //   就能看到所有人的密码、进而登录成任意账号（超管当时是单独豁免的，普通用户全裸）。
+  //   现在 SQL 里就不选 password_enc / wechat_uid 这两列，只在库里算成布尔值下发，
+  //   密文与 openid 都不进内存、不进 JSON —— 靠 `undefined` 抹字段并不保险
+  //   （`'password' in obj` 仍为 true，序列化前被别处展开就会漏）。
   'admin/user/list': (p) => {
     isAdmin(p._uid)
-    // wechat_uid 只用来判断"是不是微信注册的", 不把 openid 明文回给前端
-    const cols = `id, username, nickname, avatar, email, phone, role, status, ai_chat, ai_image, ai_video, created_at, password_enc, wechat_uid`
+    const cols = `id, username, nickname, avatar, email, phone, role, status, ai_chat, ai_image, ai_video, created_at,
+      (password_enc IS NOT NULL) AS has_password, (wechat_uid IS NOT NULL) AS is_wechat`
     const keyword = p.keyword || ''
-    const mapPwd = (r) => {
-      const plain = decryptPassword(r.password_enc)
-      return {
-        ...r,
-        // 微信扫码免注册的账号: 管理中心据此打「微信」标签并单独分类
-        is_wechat: !!r.wechat_uid,
-        wechat_uid: undefined,
-        // 超级管理员的密码一律不下发: 否则任何管理员都能看到它、直接登录成最高权限,
-        // 「不可删除 / 不可取消 / 不可重置」这些保护就形同虚设。
-        password:
-          r.username === SUPER_ADMIN
-            ? '（受保护 · 不显示）'
-            : plain || (r.wechat_uid ? '(微信扫码注册 · 未设密码)' : '(未记录·该用户下次登录后可见)'),
-        password_enc: undefined,
-      }
-    }
+    const mapPwd = (r) => ({
+      ...r,
+      // 微信扫码免注册的账号: 管理中心据此打「微信」标签并单独分类
+      is_wechat: !!r.is_wechat,
+      has_password: !!r.has_password,
+    })
     if (keyword) {
       return db
         .prepare(
@@ -3877,6 +4112,8 @@ app.use((req, res, next) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[timepick-api] listening on http://0.0.0.0:${PORT}/api`)
   console.log(webRoot ? `[timepick-web] serving ${webRoot}` : '[timepick-web] 未找到前端产物, 仅提供 API')
+  // 摆件语义检索：后台把 13 件物品的语料向量化好（有磁盘缓存，第二次启动瞬间完成）
+  warmupProps()
   // 超管手机号不再写死在代码里，必须由环境变量提供，否则所有超管专属操作都会静默失效，
   // 排查起来很难（表现为「点了没反应」而不是报错），所以在启动时就明确提示一次。
   if (!SUPER_ADMIN) {
@@ -3906,4 +4143,13 @@ app.listen(PORT, '0.0.0.0', () => {
   } catch (e) {
     console.warn('[square/backfill] 补投影失败（不影响启动）:', e.message)
   }
+  // 存量摆件的「数据检索」补全：给老记忆补上 prop_furniture，房间里的物品才跟得上新规则。
+  // 要调向量接口，所以延后几秒再跑，绝不能挡启动。
+  setTimeout(() => {
+    backfillPropFurniture()
+      .then((r) => {
+        if (r.items) console.log(`[room/prop] 存量检索补全 ${r.items} 条（${r.spaces} 间房，${r.changed} 件物品因此更换）`)
+      })
+      .catch((e) => console.warn('[room/prop] 存量检索补全失败（不影响使用）:', e.message))
+  }, 4000)
 })

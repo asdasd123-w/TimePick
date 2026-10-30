@@ -13,6 +13,22 @@
         <span class="ai-sub">陪你回望每一段时光</span>
       </div>
       <span class="head-spark">✦</span>
+      <!-- 小猫的嗓子开关：开=念出回答，关=只打字（默认开） -->
+      <button
+        class="head-voice"
+        :class="{ on: speakOn, busy: speaking }"
+        type="button"
+        :title="speakOn ? '小橘会念出回答 · 点击静音' : '小橘只看不说 · 点击打开语音'"
+        :aria-pressed="speakOn"
+        aria-label="小猫语音"
+        @click="toggleSpeak"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 9.5v5h3.4L12 18.4V5.6L7.4 9.5H4Z" />
+          <path v-if="speakOn" d="M15.6 9.2a4.2 4.2 0 0 1 0 5.6M18.2 6.6a7.6 7.6 0 0 1 0 10.8" />
+          <path v-else d="M16 9.5l5 5m0-5-5 5" />
+        </svg>
+      </button>
       <button
         class="head-clear"
         type="button"
@@ -152,6 +168,8 @@ function onPanelDragEnd() {
   window.removeEventListener('pointerup', onPanelDragEnd)
 }
 onBeforeUnmount(onPanelDragEnd)
+// 面板关掉 / 切页面时把正在念的话掐掉，否则声音会跟着用户跑到别的页面
+onBeforeUnmount(() => stopSpeak())
 
 const memoriesStore = useMemoriesStore()
 const auth = useCloudAuthStore()
@@ -334,7 +352,12 @@ function buildSystemPrompt() {
 
   prompt += `
 请基于这些记录，用温暖、理解的语气与用户对话。当用户询问心情分析时，结合这些记忆内容给出有洞察力的回应。
-如果用户没有记录，就鼓励用户开始记录生活。`
+如果用户没有记录，就鼓励用户开始记录生活。
+
+★ 你说的话会被语音念出来，所以必须像"聊天"而不是"写文章"：
+- 每次回答控制在 2~3 句、60 字以内，先接住对方的话；
+- 不要分点、不要列表、不要 markdown、不要标题，就是一口气说出来的口语；
+- 想展开的内容留个话头问一句"要不要听听"，用户想听再接着说。`
 
   if (!aiPerms.value.cross) {
     prompt += `
@@ -376,6 +399,8 @@ async function clearChat() {
 async function send(preset) {
   const text = (preset ?? draft.value).trim()
   if (!text || thinking.value) return
+  // 用户一开口，小猫就先闭嘴——不然两边同时在说，谁也听不清
+  stopSpeak()
   draft.value = ''
   push({ role: 'user', text })
   await scrollEnd()
@@ -403,12 +428,187 @@ async function send(preset) {
       reply = localReply(text)
     }
     push({ role: 'ai', text: reply })
+    // 说完就念（不 await：合成本身要 1~2 秒，不该卡住"正在想…"的收尾）
+    speak(reply)
   } catch {
     push({ role: 'ai', text: '小橘打了个小盹, 连接中断了, 再试一次好吗?' })
   } finally {
     thinking.value = false
     await scrollEnd()
   }
+}
+
+// ---- 小猫的嗓子：把回答念出来（2026-10-29）----
+// 链路：回复文字 → 服务端 ai/tts 合成 wav（qwen3-tts，转存本地）→ 浏览器播放。
+// 兜底：没配密钥 / 合成失败 → 浏览器自带 speechSynthesis（音调抬高就当小猫）。
+// 为什么不让模型直接输出音频：文字要先落库进聊天记录，音频只是"念一遍"的表达方式，
+// 两件事分开做，聊天记录才能搜索、才能换嗓子重新念。
+const VOICE_KEY = 'tp_pet_voice'
+const speakOn = ref(localStorage.getItem(VOICE_KEY) !== '0')
+const speaking = ref(false)
+let audioEl = null
+// 语音链路调试：控制台执行 localStorage.tp_voice_debug='1' 后刷新，能看清每一步
+// （合成多久、为什么没播、被谁打断）——这类"偶发不响"光看界面查不出来
+const voiceDbg = (...a) => {
+  try {
+    if (localStorage.getItem('tp_voice_debug') === '1') console.log('[小橘语音]', ...a)
+  } catch {
+    /* 隐私模式下 localStorage 不可用，忽略 */
+  }
+}
+// 说话序号：每换一句就 +1，在途的旧请求回来发现自己过期就丢掉（避免叠音）
+let speakSeq = 0
+
+function stopSpeak() {
+  speakSeq += 1
+  voiceDbg('stopSpeak seq=', speakSeq, 'audio=', !!audioEl)
+  if (audioEl) {
+    const a = audioEl
+    audioEl = null
+    try {
+      a.pause()
+      a.src = ''
+    } catch {
+      /* 已经停了 */
+    }
+    // 把还在 await 的播放放掉，否则下一句要等它自己超时才会接上
+    if (typeof a._resolve === 'function') a._resolve(false)
+  }
+  try {
+    window.speechSynthesis?.cancel()
+  } catch {
+    /* 浏览器不支持就算了 */
+  }
+  speaking.value = false
+}
+
+/** 念之前先把"不是话"的东西去掉：代码块、markdown 记号、表情、括号里的动作说明 */
+function speakable(text) {
+  return String(text || '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/[*_`#>~|]/g, '')
+    .replace(/（[^）]{0,12}）/g, '')
+    .replace(/\([^)]{0,12}\)/g, '')
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    // 60 字左右的回复念 15 秒已经是"聊天"的上限，再长就该看文字了
+    .slice(0, 180)
+}
+
+/**
+ * 把一段话切成「首句 + 其余」。
+ * 为什么要切：语音合成耗时几乎随字数线性增长——整段 300 字要 17 秒才出声（实测），
+ * 用户体感就是"小猫死了"。先合成首句（≤ 26 字，1 秒出头）立刻开口，
+ * 其余在后台同步合成，等首句念完正好接上，中间不断档。
+ * 断点选择：优先句末标点（。！？…；～），太长就退到逗号——别把词劈开。
+ */
+function splitSpeak(text) {
+  const s = String(text || '')
+  const END = /[。！？!?…；;～~]/
+  // 首段至少 6 个字：太短的开口（"抱抱你～"）虽然出声快，但念完 1 秒就完了，
+  // 长尾还在合成，中间会静一下；6~26 字刚好念 2~4 秒，够长尾追上
+  for (let i = 5; i < Math.min(s.length, 30); i++) {
+    if (END.test(s[i])) return { head: s.slice(0, i + 1).trim(), rest: s.slice(i + 1).trim() }
+  }
+  // 第一句太长：退到 24 字内最后一个逗号/顿号，断在半句上听起来最自然
+  const win = s.slice(0, 24)
+  const comma = Math.max(win.lastIndexOf('，'), win.lastIndexOf('、'), win.lastIndexOf(','), win.lastIndexOf(' '))
+  const at = comma >= 10 ? comma + 1 : 24
+  return { head: s.slice(0, at).trim(), rest: s.slice(at).trim() }
+}
+
+function browserSpeak(text) {
+  const synth = window.speechSynthesis
+  if (!synth || !text) return false
+  const u = new SpeechSynthesisUtterance(text)
+  u.lang = 'zh-CN'
+  u.pitch = 1.7 // 抬高音调，听起来年轻/像小猫
+  u.rate = 1.08
+  u.onend = () => {
+    speaking.value = false
+  }
+  u.onerror = () => {
+    speaking.value = false
+  }
+  synth.speak(u)
+  return true
+}
+
+/** 播一个 url；返回「播完 / 出错 / 被打断」的 Promise（被打断由 stopSpeak 放行） */
+function playUrl(url, my) {
+  return new Promise((resolve) => {
+    const a = new Audio(url)
+    // 略微加速：猫说话的节奏比人快，听起来更"活"
+    a.playbackRate = 1.06
+    audioEl = a
+    const done = (ok) => {
+      if (audioEl === a) audioEl = null
+      voiceDbg('播放结束', ok ? 'ok' : 'fail', url)
+      resolve(ok)
+    }
+    a._resolve = done
+    a.onended = () => done(true)
+    a.onerror = () => done(false)
+    voiceDbg('开始播放', url)
+    a.play().catch((e) => {
+      voiceDbg('play 被拒', e?.name)
+      done(false)
+    })
+  })
+}
+
+async function speak(text) {
+  if (!speakOn.value) return
+  const say = speakable(text)
+  if (!say) return
+  stopSpeak()
+  const my = ++speakSeq
+  speaking.value = true
+  const { head, rest } = splitSpeak(say)
+  // ★ 2026-10-29 延迟优化：两段并发合成，首段一回来就开口；
+  //   长尾在后台合成，等首段念完正好接上。以前整段一起合成，
+  //   300 字的回复要等 17 秒才出声，用户以为小猫卡住了。
+  const headP = cloudApi.aiTts({ text: head }).catch((e) => {
+    voiceDbg('首段合成失败', e?.message)
+    return null
+  })
+  const restP = rest
+    ? cloudApi.aiTts({ text: rest }).catch((e) => {
+        voiceDbg('长尾合成失败', e?.message)
+        return null
+      })
+    : null
+  voiceDbg('开口', JSON.stringify({ head, tailLen: rest.length }))
+  try {
+    const h = await headP
+    voiceDbg('首段返回', h?.url, 'seq', my, '/', speakSeq)
+    if (my !== speakSeq) return // 期间用户又发了消息 / 关掉了语音
+    if (!h || !h.url) throw new Error('tts failed')
+    await playUrl(h.url, my)
+    voiceDbg('首段播完', 'seq', my, '/', speakSeq)
+    if (!restP || my !== speakSeq) {
+      if (my === speakSeq) speaking.value = false
+      return
+    }
+    const r = await restP
+    if (my !== speakSeq) return
+    if (!r || !r.url) {
+      speaking.value = false
+      return
+    }
+    await playUrl(r.url, my)
+    if (my === speakSeq) speaking.value = false
+  } catch {
+    if (my !== speakSeq) return
+    if (!browserSpeak(say)) speaking.value = false
+  }
+}
+
+function toggleSpeak() {
+  speakOn.value = !speakOn.value
+  localStorage.setItem(VOICE_KEY, speakOn.value ? '1' : '0')
+  if (!speakOn.value) stopSpeak()
 }
 
 // ---- 语音输入: 麦克风采集 PCM -> 浏览器内转 16kHz 单声道 WAV -> 服务端 qwen3-asr 转文字 -> 自动发送 ----
@@ -751,6 +951,44 @@ watch(
 
 .head-clear:hover {
   color: #e0865a;
+}
+
+/* 小猫的嗓子开关：开启时是暖橘色 + 轻微呼吸，说话时点一下跳动，
+   关掉是灰色 + 一个叉，用户一眼能看出"现在会不会出声" */
+.head-voice {
+  display: flex;
+  border: none;
+  background: transparent;
+  color: #b3a79c;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.head-voice:hover {
+  color: #e0865a;
+}
+
+.head-voice.on {
+  color: #e0865a;
+}
+
+.head-voice.busy svg {
+  animation: voicePulse 0.9s ease-in-out infinite;
+}
+
+@keyframes voicePulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.18); opacity: 0.65; }
+}
+
+.head-voice svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .head-clear svg {

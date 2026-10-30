@@ -85,6 +85,8 @@ export const cloudApi = {
   removeSpace: (p) => call('memory/space/remove', p),
   clearSpace: (p) => call('memory/space/clear', p),
   listMyItems: () => call('memory/item/my'),
+  // 语义搜索：字面搜不到时前端才来问，返回「意思相近」的记忆 id 集合
+  semanticSearch: (p) => call('memory/semantic-search', p),
   listItems: (p) => call('memory/item/list', p),
   // 岛屿总览(我的记忆空间): 每条记忆自己是一座岛; 编辑悬停文案/外观; 删除 = 删该条记忆
   listIslands: () => call('memory/island/list'),
@@ -111,6 +113,8 @@ export const cloudApi = {
   uploadMediaAv: (p) => call('media/upload-av', p),
   // AI 语音识别: 把录音(dataURL)转成文字
   aiAsr: (p) => call('ai/asr', p),
+  // 小猫说话：服务端合成 wav 并转存，回 /uploads/tts/xxx.wav（同一句只合成一次）
+  aiTts: (p) => call('ai/tts', p),
   // 背景音乐: 预置四首打包在前端, 这里管理用户自传曲目
   listBgm: () => call('bgm/list'),
   uploadBgm: (p) => call('bgm/upload', p),
@@ -183,6 +187,8 @@ export const cloudApi = {
   adminReportDetail: (p) => call('admin/report/detail', p),
   adminUpdateReport: (p) => call('admin/report/update', p),
   adminRemoveReport: (p) => call('admin/report/remove', p),
+  // 下架被举报内容并私信通知双方（管理员匿名署名「拾光管理员」）
+  adminTakedownReport: (p) => call('admin/report/takedown', p),
   adminListActivities: () => call('admin/activity/list'),
   adminCreateActivity: (p) => call('admin/activity/create', p),
   adminUpdateActivity: (p) => call('admin/activity/update', p),

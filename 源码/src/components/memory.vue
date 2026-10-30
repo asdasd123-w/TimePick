@@ -182,6 +182,8 @@
               <span class="entry-meta">
                 {{ e.island || e.space }} · {{ e.date }}
               </span>
+              <!-- 语义兜底命中：字面上一个字都不一样，得告诉用户"为什么它会出现在这里" -->
+              <span v-if="isSemanticHit(e)" class="entry-sem">≈ 意思相近</span>
               <p v-if="e.content" class="entry-content">{{ e.content }}</p>
               <!-- 详情按钮恒显示: 不管内容长短/有没有媒体, 都能点开看完整详情 -->
               <button class="entry-detail-btn" type="button" @click="openDetail(e)">详情 →</button>
@@ -196,24 +198,38 @@
               </div>
             </article>
             <div v-if="!filtered.length" class="entry-empty">
-              <div class="empty-art">
-                <span class="spark s1">✦</span>
-                <span class="spark s2">✧</span>
-                <span class="spark s3">✦</span>
-                <div class="empty-polaroid">
-                  <span class="empty-photo">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path
-                        d="M12 20s-7-4.6-7-9.2A4 4 0 0 1 12 8a4 4 0 0 1 7 2.8c0 4.6-7 9.2-7 9.2Z"
-                      />
-                    </svg>
-                  </span>
-                  <span class="empty-caption">your first memory</span>
+              <!-- 搜不到 ≠ 没有记忆：这两件事在界面上必须分开，
+                   否则用户会以为自己的记忆丢了（验证报告 FIND-01 同类问题） -->
+              <template v-if="keywordDeb.trim()">
+                <div class="empty-art">
+                  <span class="spark s1">✦</span>
+                  <span class="spark s2">✧</span>
+                  <span class="spark s3">✦</span>
                 </div>
-              </div>
-              <p class="empty-title">这里还空着呢</p>
-              <p class="empty-sub">把第一段回忆夹进这本手账, 让时光有处可栖。</p>
-              <button v-if="!browseUid" class="empty-cta" type="button" @click="openAdd">+ 记下第一段回忆</button>
+                <p class="empty-title">没有找到「{{ keywordDeb.trim() }}」</p>
+                <p class="empty-sub">{{ semHint }}</p>
+                <button class="empty-cta" type="button" @click="keyword = ''">清空搜索</button>
+              </template>
+              <template v-else>
+                <div class="empty-art">
+                  <span class="spark s1">✦</span>
+                  <span class="spark s2">✧</span>
+                  <span class="spark s3">✦</span>
+                  <div class="empty-polaroid">
+                    <span class="empty-photo">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M12 20s-7-4.6-7-9.2A4 4 0 0 1 12 8a4 4 0 0 1 7 2.8c0 4.6-7 9.2-7 9.2Z"
+                        />
+                      </svg>
+                    </span>
+                    <span class="empty-caption">your first memory</span>
+                  </div>
+                </div>
+                <p class="empty-title">这里还空着呢</p>
+                <p class="empty-sub">把第一段回忆夹进这本手账, 让时光有处可栖。</p>
+                <button v-if="!browseUid" class="empty-cta" type="button" @click="openAdd">+ 记下第一段回忆</button>
+              </template>
             </div>
           </div>
         </div>
@@ -523,6 +539,24 @@
       </div>
     </div>
 
+    <!-- 删除记忆二次确认（★ 2026-10-29，对应验证报告 FIND-03）：
+         原来点「删除」立刻调接口，只弹一个「已删除」提示，误触就没了（不可恢复）。
+         同一产品里「删除小岛 / 删除反馈 / 删除所有数据」都有确认，这里补齐并保持一致。 -->
+    <div v-if="delTarget" class="sl-mask" @click.self="delTarget = null">
+      <div class="sl-card">
+        <p class="sl-title">删除这条记忆？</p>
+        <p class="sl-sub">
+          「{{ delTarget.title || '未命名记忆' }}」删除后无法恢复，附带的照片、音频也会一起删掉。
+        </p>
+        <div class="sl-acts">
+          <button class="sl-btn" type="button" @click="delTarget = null">取消</button>
+          <button class="sl-btn danger" type="button" :disabled="deleting" @click="doRemove">
+            {{ deleting ? '删除中…' : '确认删除' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 粉丝名单: 只有本人能打开(他人视角服务端不返回名单) -->
     <div v-if="showFans" class="fans-mask" @click.self="showFans = false">
       <div class="fans-card">
@@ -623,7 +657,7 @@
           <span class="dialog-title">还要为这条记忆加点什么？</span>
           <button class="dialog-close" type="button" aria-label="关闭" :disabled="aiBusy" @click="aiAssist = null">×</button>
         </div>
-        <p class="ai-lead">「{{ aiAssist.entry.title }}」已经放进房间了。以下 AI 能力可以多选，也可以都不选。</p>
+        <p class="ai-lead">{{ aiLead }}</p>
         <ul class="ai-opts">
           <li>
             <label class="ai-opt" :class="{ off: !aiPerm.image }">
@@ -1053,6 +1087,58 @@ function inTime(date, range) {
   return true
 }
 
+// ★ 2026-10-29 语义搜索兜底
+// 字面搜索只比标题/类型/空间名/小岛名（连正文都不搜）：「大理」永远搜不到
+// 「那天风很大，我们坐在洱海边」。所以字面一条都不命中时，交给服务端按**意思**找——
+// 用的是 3D 摆件那套 text-embedding-v3（server/memorySearch.js）。
+// 只在"搜不到"时触发：常规搜索零延迟，也不白花向量额度。
+const semanticIds = ref(null) // null = 没走兜底 | Set = 意思相近的记忆 id
+const semSearching = ref(false)
+const semDisabled = ref(false)
+let semSeq = 0
+
+// 字面命中条数：不套空间/岛屿/时间筛选，只判断"这个词本身有没有搜到东西"
+const literalHitCount = computed(() => {
+  const k = keywordDeb.value
+  if (!k) return 0
+  return sourceEntries.value.filter(
+    (e) =>
+      String(e.title || '').includes(k) ||
+      String(e.type || '').includes(k) ||
+      String(e.space || '').includes(k) ||
+      String(e.island || '').includes(k),
+  ).length
+})
+
+async function runSemanticSearch() {
+  const k = keywordDeb.value.trim()
+  const my = ++semSeq
+  if (!k || literalHitCount.value) {
+    semanticIds.value = null
+    semSearching.value = false
+    return
+  }
+  semSearching.value = true
+  try {
+    const r = await cloudApi.semanticSearch({ q: k })
+    if (my !== semSeq) return
+    semDisabled.value = !!r?.disabled
+    semanticIds.value = new Set(Array.isArray(r?.ids) ? r.ids : [])
+  } catch {
+    if (my !== semSeq) return
+    semanticIds.value = null
+  } finally {
+    if (my === semSeq) semSearching.value = false
+  }
+}
+watch([keywordDeb, literalHitCount], runSemanticSearch)
+
+const semHint = computed(() => {
+  if (semSearching.value) return '正在按意思找相近的记忆…'
+  if (semDisabled.value) return '换个具体的词试试，或清空搜索看全部记忆'
+  return '换个说法试试，或清空搜索看全部记忆'
+})
+
 // 搜索(标题/类型/所属空间/小岛) + 三个筛选共同作用于列表
 const filtered = computed(() =>
   sourceEntries.value.filter((e) => {
@@ -1064,7 +1150,11 @@ const filtered = computed(() =>
         String(e.type || '').includes(k) ||
         String(e.space || '').includes(k) ||
         String(e.island || '').includes(k)
-      if (!hit) return false
+      // 字面没命中就看语义兜底的结果（两条都没有才算真没找到）
+      if (!hit) {
+        const sem = semanticIds.value
+        if (!sem || !sem.has(e.id)) return false
+      }
     }
     if (space.value !== ALL_SPACE && e.space !== space.value) return false
     if (island.value !== ALL_ISLAND && e.island !== island.value) return false
@@ -1072,6 +1162,20 @@ const filtered = computed(() =>
     return true
   }),
 )
+
+// 这条是"字面没命中、靠意思找出来的"（只在这种卡片上打标，字面命中的不必标）
+function isSemanticHit(e) {
+  const sem = semanticIds.value
+  if (!sem || !sem.has(e.id)) return false
+  const k = keywordDeb.value
+  if (!k) return false
+  return !(
+    String(e.title || '').includes(k) ||
+    String(e.type || '').includes(k) ||
+    String(e.space || '').includes(k) ||
+    String(e.island || '').includes(k)
+  )
+}
 
 // 时光统计：按**小岛**统计你写下的记忆条数（原来按 type，而 type 早就不能填了，永远只有"其他"）
 const stats = computed(() => {
@@ -1279,6 +1383,15 @@ const aiAnyPicked = computed(() => {
   const a = aiAssist.value
   return !!(a && (a.image || a.video || a.polish))
 })
+// 弹窗顶部说明：新建说「已经放进房间了」，修改说「修改已保存」
+const aiLead = computed(() => {
+  const a = aiAssist.value
+  if (!a) return ''
+  const name = a.entry?.title || '这条记忆'
+  return a.mode === 'edit'
+    ? `「${name}」的修改已保存。以下 AI 能力可以多选，也可以都不选。`
+    : `「${name}」已经放进房间了。以下 AI 能力可以多选，也可以都不选。`
+})
 
 // ---- AI 生成进度卡 ----
 // 图片 / 视频 / 润色各自的实时状态，让用户看得见「开始生成 → 生成中 → 生成完成」。
@@ -1341,11 +1454,14 @@ function aiOptionAllowed(kind) {
   return !!aiPerm.value[AI_PERM_KEY[kind]]
 }
 
-function openAiAssist(entry) {
+function openAiAssist(entry, mode = 'create') {
   // 需求：AI 生图 / 润色语言 / 生视频三项「默认为不选择」。
   // 一律全不勾，用户自己点，避免误触发额度和误生成。
+  // ★ 2026-10-29：mode='edit' 是「修改后保存」也弹这个框（用户要求，替换原来只弹
+  //   一句「修改已保存」的做法）。文案要区分「已放进房间」和「修改已保存」。
   aiAssist.value = {
     entry,
+    mode,
     image: false,
     video: false,
     polish: false,
@@ -1872,16 +1988,19 @@ async function save() {
     if (isNew) {
       saved = await store.addEntry(data, { cover: !anyPerm })
     } else {
-      await store.updateEntry(data.id, data)
+      // ★ 修改后保存也弹 AI 弹窗（用户要求，替换原来只 tip「修改已保存」）：
+      //   updateEntry 会把更新后的条目返回，直接拿它当弹窗目标 —— 润色/出图
+      //   都要靠 entry.id 回写同一条记忆，不能传旧对象。
+      const updated = await store.updateEntry(data.id, data)
+      showDialog.value = false
+      tip('修改已保存')
+      if (updated) openAiAssist(updated, 'edit')
+      return
     }
     showDialog.value = false
-    if (isNew) {
-      tip('已添加记忆')
-      // ★ 无论管理员开没开权限都要弹（需求），没权限的项在选择时提示
-      if (saved) openAiAssist(saved)
-    } else {
-      tip('修改已保存')
-    }
+    tip('已添加记忆')
+    // ★ 无论管理员开没开权限都要弹（需求），没权限的项在选择时提示
+    if (saved) openAiAssist(saved)
   } catch (e) {
     tip(e.message || '保存失败')
   } finally {
@@ -1902,12 +2021,26 @@ watch(
   },
 )
 
-async function remove(entry) {
+// 删除改成「先弹确认、再删」：delTarget 非空时显示确认框（对应验证报告 FIND-03）
+const delTarget = ref(null)
+const deleting = ref(false)
+
+function remove(entry) {
+  delTarget.value = entry
+}
+
+async function doRemove() {
+  const entry = delTarget.value
+  if (!entry || deleting.value) return
+  deleting.value = true
   try {
     await store.removeEntry(entry.id)
     tip('已删除')
+    delTarget.value = null
   } catch (e) {
     tip(e.message || '删除失败')
+  } finally {
+    deleting.value = false
   }
 }
 </script>
@@ -2388,6 +2521,18 @@ async function remove(entry) {
   color: #a08063;
 }
 
+/* 「≈ 意思相近」标记：字面搜不到、靠语义找出来的卡片才显示 */
+.entry-sem {
+  align-self: flex-start;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(240, 145, 124, 0.12);
+  border: 1px solid rgba(240, 145, 124, 0.28);
+  font-size: 11.5px;
+  letter-spacing: 0.3px;
+  color: #c9705c;
+}
+
 .entry-content {
   margin: 0;
   display: -webkit-box;
@@ -2828,6 +2973,19 @@ async function remove(entry) {
   background: linear-gradient(135deg, #f7a58f, #e0705a);
   color: #fff;
   font-weight: 600;
+}
+
+/* 删除确认框里的危险操作: 比「取消」更实, 但用低饱和砖红, 不抢整页的暖色调 */
+.sl-btn.danger {
+  border-color: transparent;
+  background: linear-gradient(135deg, #e0866e, #c25b45);
+  color: #fff;
+  font-weight: 600;
+}
+
+.sl-btn.danger:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .sl-tip {

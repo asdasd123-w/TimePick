@@ -187,6 +187,12 @@ if (!pmCols.includes('is_deleted')) {
 if (!pmCols.includes('deleted_by')) {
   db.exec("ALTER TABLE private_message ADD COLUMN deleted_by INTEGER DEFAULT NULL")
 }
+// 系统私信署名（2026-10-29）：管理员处理举报后要私信双方，但**不能暴露是哪个管理员**。
+// 非空时前端拿到的 sender_id 会被抹成 0、昵称换成这个值（如「拾光管理员」），
+// 库里仍然记录真实 sender_id 以便审计。
+if (!pmCols.includes('sender_label')) {
+  db.exec("ALTER TABLE private_message ADD COLUMN sender_label TEXT NOT NULL DEFAULT ''")
+}
 
 // 旧库补列 is_major
 const actCols = db.prepare('PRAGMA table_info(activity)').all().map((c) => c.name)
@@ -236,6 +242,15 @@ if (!itemCols.includes('ai_video')) {
 // 旧库补列 memory_item.ai_video_task(异步生成中的 DashScope 任务号)
 if (!itemCols.includes('ai_video_task')) {
   db.exec("ALTER TABLE memory_item ADD COLUMN ai_video_task TEXT NOT NULL DEFAULT ''")
+}
+
+// ★ 2026-10-29: memory_item.prop_furniture —— 这条记忆在 3D 房间里对应哪件摆件。
+//   以前这个是「每次规划时临时算」的（关键词打分），算错了也没地方记。
+//   现在检索（向量 + 字面）的结果落在这一列：写一次、到处复用 ——
+//   planSpace 才能保持纯函数（重排/重启结果一致），也不会每次进房间都重新检索。
+//   空串 = 还没检索过（老数据），走字面规则兜底。
+if (!itemCols.includes('prop_furniture')) {
+  db.exec("ALTER TABLE memory_item ADD COLUMN prop_furniture TEXT NOT NULL DEFAULT ''")
 }
 
 // 旧库补列 user.password_enc(密码明文的 AES-256-GCM 密文, 仅供管理中心显示真实密码)

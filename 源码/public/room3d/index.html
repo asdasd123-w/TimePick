@@ -3,6 +3,11 @@
 <head>
   <meta charset="utf-8">
 
+  <!-- ★ 手动加的一行（重新构建 Cocos 后若被覆盖，重新加上即可）：
+       不写这行浏览器会去请求 /favicon.ico，这个页面所在目录里没有它，
+       控制台就常驻一条 404 —— 白噪声，但会被当成"部署出错"。 -->
+  <link rel="icon" href="/favicon.svg">
+
   <title>Cocos Creator | sg3d</title>
 
   <!--http://www.html5rocks.com/en/mobile/mobifying/-->
