@@ -34,6 +34,7 @@
           ><b>{{ author.followers || 0 }}</b
           >粉丝</span
         >
+
       </div>
       <div class="ac-tags">
         <span v-for="t in author.tags" :key="t" class="ac-tag"># {{ t }}</span>

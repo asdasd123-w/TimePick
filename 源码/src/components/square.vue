@@ -329,11 +329,11 @@
 
     <p v-if="tipText" class="sq-tip">{{ tipText }}</p>
 
+
     <!-- 菜单外点击关闭改由 document 的 pointerdown 处理。
          ★ 原来这里是一层 fixed 遮罩(z-index 20): 卡片因为 content-visibility 形成独立
          层叠上下文, 菜单的 z-index 30 只在该层叠上下文里有效, 结果遮罩盖在菜单上,
          点「修改/删除」只会把菜单关掉 —— 这就是「点了不管」的原因。 -->
-
     <!-- 作者个人信息子组件 -->
     <author-card
       v-if="authorOf"
@@ -400,8 +400,8 @@
       @add-comment="addComment"
     />
 
-    <!-- 共享记忆的详情已并入上面这个统一详情: 它现在就是一条普通广场动态 -->
 
+    <!-- 共享记忆的详情已并入上面这个统一详情: 它现在就是一条普通广场动态 -->
     <!-- 帖子详情弹窗（长文查看） -->
     <div v-if="postDetailModal" class="sq-mask" @click.self="postDetailModal = null">
       <div class="sq-dialog post-detail-modal" :style="pdDragStyle">
@@ -435,9 +435,8 @@
         </div>
       </div>
     </div>
-
+    
     <!-- 广场不再有「添加数据」入口: 写/改只在记忆库, 分享后自动进广场 -->
-
     <!-- 活动详情弹窗 -->
     <div v-if="actDetail" class="act-detail-overlay" @click.self="actDetail = null">
       <div class="act-detail-modal">

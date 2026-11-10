@@ -85,6 +85,7 @@
       </form>
 
       <p v-if="tab === 'login'" class="am-tip">演示账号: linjian / demo123456</p>
+
     </div>
 
     <ForgotPassword v-if="showForgot" @close="showForgot = false" />

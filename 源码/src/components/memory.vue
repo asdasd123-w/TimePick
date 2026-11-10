@@ -3280,8 +3280,7 @@ async function doRemove() {
 
 /* ---- 自定义岛屿下拉（2026-10-27 / 13:20 再调）----
    ★ 触发器不再用蓝紫底：改成和「新建岛屿」输入框**完全一致**的白底 + 米色边框，
-     同一个字段的两种模式（新建 / 已有）才是同一套控件，切过去不会像换了皮肤。
-   展开列表用用户指定的浅天蓝 rgb(167, 222, 250) = #a7defa。 */
+     同一个字段的两种模式（新建 / 已有）才是同一套控件，切过去不会像换了皮肤。*/
 .st-dd {
   position: relative;
 }
@@ -3339,7 +3338,7 @@ async function doRemove() {
   list-style: none;
   border: 1px solid rgba(125, 199, 248, 0.55);;
   border-radius: 12px;
-  /* 用户指定：浅天蓝 rgb(167, 222, 250) */
+
   background: #bfe8fc;
   box-shadow: 0 12px 28px rgba(60, 120, 160, 0.2);
   max-height: 232px;

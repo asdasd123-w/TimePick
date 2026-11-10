@@ -62,10 +62,10 @@
 
   <!-- ============ 竖排（小岛总览页） ============ -->
   <div v-else class="mtl" :class="'mtl-' + kind">
-    <p class="mtl-head">
+    <!-- <p class="mtl-head">
       <span class="mtl-title">{{ label }}</span>
       <span class="mtl-count">{{ nodes.length }}</span>
-    </p>
+    </p> -->
 
     <div ref="scrollEl" class="mtl-scroll">
       <span class="mtl-line" aria-hidden="true"></span>
@@ -177,14 +177,15 @@ watch(
      ★ 横排也用得上：宽度 100% + 左右 padding，不写就会横向溢出 20px。 */
   box-sizing: border-box;
   width: 200px;
-  padding: 11px 8px 10px 16px;
-  border-radius: 16px;
+  /* padding: 11px 8px 10px 16px; */
+  /* border-radius: 16px; */
   /* 刻意做得很淡：这条常压在画面内容上（岛屿页压着最右那座岛的画面），
      底色一重就变成"贴了张不透明卡片"。
      不用 backdrop-filter —— 房间页那层下面是 canvas，模糊整块画布很贵。 */
-  background: linear-gradient(180deg, rgba(255, 252, 246, 0.34), rgba(255, 246, 235, 0.14));
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  box-shadow: 0 8px 24px rgba(120, 90, 60, 0.1);
+  /* background: rgba(247, 213, 203,0.6); */
+  /* background: linear-gradient(180deg, rgba(255, 252, 246, 0.34), rgba(255, 246, 235, 0.14)); */
+  /* border: 1px solid rgba(255, 255, 255, 0.42); */
+  /* box-shadow: 0 8px 24px rgba(120, 90, 60, 0.1); */
   color: var(--mtl-ink);
   /* 容器不吃事件：房间页这条压在 3D 画布上，挡了就没法拖视角 */
   pointer-events: none;
@@ -244,14 +245,15 @@ watch(
   right: 9px;
   top: 8px;
   bottom: 8px;
-  width: 1px;
-  background: linear-gradient(
+  width: 3px;
+  /* background: linear-gradient(
     180deg,
     rgba(150, 120, 95, 0) 0%,
     rgba(150, 120, 95, 0.4) 10%,
     rgba(150, 120, 95, 0.4) 90%,
     rgba(150, 120, 95, 0) 100%
-  );
+  ); */
+  background-color: #EBCF9B;
   pointer-events: none;
 }
 
@@ -292,6 +294,10 @@ watch(
 }
 
 .mtl-txt {
+  padding: 6px 10px 6px 12px;
+  box-shadow: 0 3px  rgba(91, 80, 116, 0.06);
+  background:rgba(255,249,242,0.82);
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -305,21 +311,23 @@ watch(
   white-space: nowrap;
   font-size: 13px;
   font-weight: 500;
-  color: var(--mtl-ink-dim);
+  /* color: var(--mtl-ink-dim); */
+  color:#454764;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
   transition: color 0.2s ease, font-size 0.2s ease;
 }
 .mtl-date {
   font-size: 10.5px;
   font-style: normal;
-  color: rgba(91, 68, 51, 0.46);
+  /* color: rgba(91, 68, 51, 0.46); */
+  color:#85839A;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+  /* text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55); */
 }
 
 .mtl-dotbox {
   position: relative;
-  flex: 0 0 18px;
+  flex: 0 0 20px;
   width: 18px;
   height: 18px;
   display: grid;
@@ -329,19 +337,24 @@ watch(
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--mtl-dot-off);
+  /* background: var(--mtl-dot-off); */
+  background-color:#FFF9F2;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.32);
   transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), background 0.25s ease,
     box-shadow 0.25s ease, width 0.25s ease, height 0.25s ease;
 }
+.mtl-txt:hover {
+  background:rgba(246,189,88,0.3);
+}
 .mtl-btn:hover .mtl-dot {
-  background: #b8865a;
+   background-color: #F6BA5B;
   transform: scale(1.3);
 }
 
 /* ---- 当前项：白点 + 光环 + 加粗 ---- */
 .mtl-node.on .mtl-name {
-  color: #43301f;
+  /* color: #43301f; */
+  
   font-weight: 700;
   font-size: 13.5px;
 }
@@ -390,21 +403,22 @@ watch(
 /* ---- 岛屿页：底色浅一些、文字加白色描边光 ----
    这条会压在画面最右那座岛上，底色压太重就成"贴了张卡片"，
    压太轻文字就飘在树影里看不清。取中间值：底色留一点纱，给文字补一圈白晕。 */
-.mtl-isle {
-  background: linear-gradient(180deg, rgba(255, 252, 246, 0.46), rgba(255, 246, 235, 0.26));
-}
+ /* .mtl-isle { 
+   background: linear-gradient(180deg, rgba(255, 252, 246, 0.46), rgba(255, 246, 235, 0.26)); 
+   border:1px solid rgba(0,0,0); 
+}  */
 .mtl-isle .mtl-name {
-  color: rgba(74, 52, 38, 0.84);
+  color: #454764;
   text-shadow: 0 0 9px rgba(255, 255, 255, 0.95), 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 .mtl-isle .mtl-date {
-  color: rgba(74, 52, 38, 0.62);
-  text-shadow: 0 0 7px rgba(255, 255, 255, 0.95);
+  color:#85839A;
+  /* text-shadow: 3px 3px 3px rgba(0, 0, 0, 0.95); */
 }
 
 /* ---- 房间页：压在 3D 画面上，底色要比岛屿页沉，但别沉成一块黑板 ---- */
 .mtl-room {
-  background: linear-gradient(180deg, rgba(46, 36, 30, 0.46), rgba(46, 36, 30, 0.22));
+  /* background-color: rgba(247,213,203); */
   border-color: rgba(255, 226, 190, 0.22);
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.26);
 }
@@ -428,7 +442,7 @@ watch(
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 .mtl-room .mtl-date {
-  color: rgba(255, 238, 220, 0.5);
+  color: rgba(255, 242, 228, 0.84);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 .mtl-room .mtl-node.on .mtl-name {
@@ -460,7 +474,7 @@ watch(
   padding: 9px 12px 8px;
   border-radius: 16px;
   /* 底下那层已经是 .room-gallery 的深色渐隐，这里再压太实就成一块黑板了 */
-  background: linear-gradient(180deg, rgba(46, 36, 30, 0.42), rgba(46, 36, 30, 0.2));
+  /* background: linear-gradient(180deg, rgba(46, 36, 30, 0.42), rgba(46, 36, 30, 0.2)); */
   border: 1px solid rgba(255, 226, 190, 0.2);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
 }
