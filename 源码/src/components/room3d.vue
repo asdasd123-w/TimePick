@@ -105,6 +105,21 @@
         <span class="rg-num">{{ listItems.length }}{{ maxItems ? '/' + maxItems : '' }}</span>
         <span class="rg-hint">点一张打开这条记忆 · 可左右滑动</span>
       </div>
+
+      <!-- 记忆时间线（横排）：这座岛上的记忆按「事情发生的那天」从早到晚串成一条横线，
+           每个节点是这个物品的圆形小图。点一条 = 弹详情 + 底部卡片滑到眼前
+           （和点 3D 家具、点卡片走同一条 openItem 路径，不会出现两套详情）。 -->
+      <MemTimeline
+        v-if="memNodes.length"
+        class="room-timeline"
+        layout="h"
+        kind="room"
+        label="记忆时间线"
+        :nodes="memNodes"
+        :active-id="pickedId"
+        @pick="jumpToItem"
+      />
+
       <div class="rg-strip">
         <button
           class="rg-arrow left"
@@ -146,19 +161,7 @@
       </div>
     </div>
 
-    <!-- 记忆时间线（右侧竖排）：这座岛上的记忆，按「事情发生的那天」从早到晚串一条。
-         点一条 = 弹出这条记忆的详情，同时把底部「房间物品」滑到那张卡片并高亮
-         （和点 3D 家具、点卡片走的是同一条 openItem 路径，不会出现两套详情）。
-         位置让开右上角的操作提示卡和底部的陈列条，只在中间那段竖直空间里滚。 -->
-    <MemTimeline
-      v-if="built && !booting && !layoutError && memNodes.length"
-      class="room-timeline"
-      kind="room"
-      label="记忆时间线"
-      :nodes="memNodes"
-      :active-id="pickedId"
-      @pick="jumpToItem"
-    />
+    <!-- 记忆时间线已挪到下面「房间物品」那一块里，改成横排（见 .room-gallery 内）。 -->
 
     <!-- 点 3D 家具后，iframe 通过 postMessage 通知此处弹出该记忆的详情浮层 -->
     <transition name="fade">
@@ -780,6 +783,10 @@ const memNodes = computed(() => {
     id: it.item_id,
     title: it.title || '（无标题）',
     date: it.entry_date ? String(it.entry_date).replace(/-/g, '.') : '未填日期',
+    // 时间线上的圆形小图：只认 AI 封面（和底部卡片一致，不显示用户自己上传的照片），
+    // 没有封面就退回家具图标。coverOf() 已经做过 ai_cover 判断，这里不重复拼 URL。
+    cover: coverOf(it),
+    emoji: coverOf(it) ? '' : furnitureEmoji(it.furniture),
   }))
 })
 
@@ -2684,33 +2691,27 @@ onUnmounted(() => {
   animation: none;
 }
 
-/* ---------- 记忆时间线（右侧） ----------
-   竖直空间是量出来的，不是估的（1440×900 实测）：
-     操作提示卡 78~214px、房间物品陈列条 647px 起（253px 高）。
-   所以时间线只能吃 232~631 之间那一段：上留 18px 缝、下留 16px 缝，
-   两个数字任一改动都要回来重算，否则就是压住提示卡或者盖住陈列条右箭头。 */
+/* ---------- 记忆时间线（横排，夹在「房间物品」标题和卡片之间） ----------
+   ★ 原来是钉在右侧的竖排，位置靠 1440×900 实测的像素硬算（232~631 那段），
+     提示卡或陈列条一改高度就得回头重算，矮屏还要再写一份。
+     改成横排跟着陈列条往下排：高度由内容决定，不用再算边距，也不会压到任何东西。 */
 .room-timeline {
-  position: absolute;
-  right: 14px;
-  top: 232px;
-  z-index: 8;
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100vh - 232px - 269px);
+  position: relative;
+  margin: 0 4px 8px;
+  z-index: 1;
 }
-/* 外层已经用 max-height 卡了整条卡片（含标题和提示行），内层就别再自己设上限，
-   两个上限叠在一起会让"能滚多少"变得难算。 */
-.room-timeline :deep(.mtl-scroll) {
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: none;
+/* 矮屏（720p）：陈列条 + 时间线一口气占掉一半高度，卡片图从 164 压到 118，
+   给 3D 画面腾回 46px。宽屏不受影响（1440×900 仍是 164）。 */
+@media (max-height: 800px) {
+  .rg-card-pic {
+    height: 118px;
+  }
 }
-
-/* 矮屏（笔记本横放 / 分屏）：提示卡和陈列条都变矮，时间线跟着重算上下边界 */
-@media (max-height: 640px) {
-  .room-timeline {
-    top: 158px;
-    max-height: calc(100vh - 158px - 200px);
+/* 矮屏（720p）：陈列条 + 时间线一口气占掉一半高度，卡片图从 164 压到 118，
+   给 3D 画面腾回 46px。宽屏不受影响（1440×900 仍是 164）。 */
+@media (max-height: 800px) {
+  .rg-card-pic {
+    height: 118px;
   }
 }
 /* ============ 手机端（≤767.98px）覆盖 UI ============
@@ -2799,8 +2800,10 @@ onUnmounted(() => {
     height: 52px;
   }
   .room-tip {
-    /* 默认 bottom:24px 会压在陈列条上（同 z-index，陈列条在后面所以盖住它） */
-    bottom: calc(190px + env(safe-area-inset-bottom, 0px));
+    /* 默认 bottom:24px 会压在陈列条上（同 z-index，陈列条在后面所以盖住它）。
+       陈列条里多了一条横排时间线（93px），整体从 ~280px 长到 352px，
+       提示气泡要抬到整块的上沿之外才不会压在时间线或卡片标题上。 */
+    bottom: calc(364px + env(safe-area-inset-bottom, 0px));
     font-size: 13px;
     padding: 7px 14px;
   }
@@ -2811,14 +2814,6 @@ onUnmounted(() => {
     top: calc(56px + env(safe-area-inset-top, 0px));
     width: auto;
     height: 62%;
-  }
-
-  /* 记忆时间线：手机上从 214px 起（躲开 164~204 的提示折叠手柄），
-     底部让开 593px 起的陈列条 + 安全区，中间那段才归它 */
-  .room-timeline {
-    right: 8px;
-    top: calc(214px + env(safe-area-inset-top, 0px));
-    max-height: calc(100vh - 214px - 268px - env(safe-area-inset-bottom, 0px));
   }
 }
 </style>

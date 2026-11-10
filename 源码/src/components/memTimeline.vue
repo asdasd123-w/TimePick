@@ -1,21 +1,62 @@
 <!--
-  竖向时间轴（小岛总览页 / 3D 房间页共用）
+  记忆时间线（小岛总览页 / 3D 房间页共用），两种排布：
 
-  形态照参考图来：文字靠右对齐、圆点贴着右边缘，一条细线把圆点串起来。
-  当前项 = 白色大圆点 + 外圈扩散的光环 + 文字加粗；其余是暗色小圆点。
+  · layout="v"（默认，小岛总览页）：竖排。文字靠右对齐、圆点贴着右边缘，一条细线把点串起来。
+  · layout="h"（3D 房间页）：横排。一条横线串起每个物品的圆形小图，名字、日期压在下面，
+    左右滑动（或点两端箭头）看更多；当前项小图描一圈 #fBB043 的边并外发光。
 
-  三条约定（页面按自己的需要接）：
-  · hover(id)  —— 对应对象高亮（岛屿页让岛身发光，房间页亮卡片）
+  三种交互（页面按自己的需要接）：
+  · hover(id)  —— 对应对象高亮（岛屿页让岛身发光）
   · pick(id)   —— 点一下做什么由页面决定：
                   小岛页是「先聚焦，再点一次才进岛」；
                   房间页是「弹出这条记忆的详情，并把底部卡片滑到眼前」。
-  · activeId 变化时自动把当前项滚到可视区中间
+  · activeId 变化时自动把当前项滚到可视区中间（竖排滚纵向，横排滚横向）
 
-  ★ 容器默认不吃鼠标事件，只有每一行按钮吃。
+  ★ 容器默认不吃鼠标事件，只有每一行按钮 / 箭头吃。
     房间页这条压在 3D 画布上，整块吃事件会把「拖视角」截断成点不动。
 -->
 <template>
-  <div class="mtl" :class="'mtl-' + kind">
+  <!-- ============ 横排（3D 房间页底部） ============ -->
+  <div v-if="layout === 'h'" class="mtl mtl-h" :class="'mtl-' + kind">
+    <div class="mth-head">
+      <span class="mtl-title">{{ label }}</span>
+      <span class="mtl-count">{{ nodes.length }}</span>
+      <span class="mth-arrows">
+        <button type="button" class="mth-arrow" aria-label="向左" :disabled="!canLeft" @click="scrollH(-1)">‹</button>
+        <button type="button" class="mth-arrow" aria-label="向右" :disabled="!canRight" @click="scrollH(1)">›</button>
+      </span>
+    </div>
+
+    <div ref="scrollEl" class="mth-scroll" @scroll="refreshArrows">
+      <ul class="mth-list">
+        <span class="mth-line" aria-hidden="true"></span>
+        <li v-for="n in nodes" :key="n.id" class="mtl-node mth-node" :class="{ on: n.id === activeId }">
+          <button
+            class="mth-btn"
+            type="button"
+            :title="n.title"
+            @click="$emit('pick', n.id)"
+            @mouseenter="$emit('hover', n.id)"
+            @mouseleave="$emit('hover', null)"
+            @focus="$emit('hover', n.id)"
+            @blur="$emit('hover', null)"
+          >
+            <span class="mth-thumb">
+              <img v-if="n.cover" :src="n.cover" alt="" loading="lazy" />
+              <!-- 没有 AI 封面时用家具图标兜底：圆形小图上一片空白比放个图标更难看 -->
+              <em v-else-if="n.emoji" class="mth-ph">{{ n.emoji }}</em>
+              <i v-else class="mth-dot"></i>
+            </span>
+            <b class="mth-name">{{ n.title }}</b>
+            <em class="mth-date">{{ n.date }}</em>
+          </button>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ 竖排（小岛总览页） ============ -->
+  <div v-else class="mtl" :class="'mtl-' + kind">
     <p class="mtl-head">
       <span class="mtl-title">{{ label }}</span>
       <span class="mtl-count">{{ nodes.length }}</span>
@@ -24,12 +65,7 @@
     <div ref="scrollEl" class="mtl-scroll">
       <span class="mtl-line" aria-hidden="true"></span>
       <ul class="mtl-list">
-        <li
-          v-for="n in nodes"
-          :key="n.id"
-          class="mtl-node"
-          :class="{ on: n.id === activeId }"
-        >
+        <li v-for="n in nodes" :key="n.id" class="mtl-node" :class="{ on: n.id === activeId }">
           <button
             class="mtl-btn"
             type="button"
@@ -55,15 +91,17 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
-  // [{ id, title, date }]，顺序由调用方决定（时间轴按调用方给的顺序从上往下排）
+  // [{ id, title, date, cover?, emoji? }]，顺序由调用方决定（时间轴按调用方给的顺序排）
   nodes: { type: Array, default: () => [] },
   activeId: { type: [Number, String], default: null },
   label: { type: String, default: '时间线' },
   // 'isle' 岛屿页（木色）/ 'room' 房间页（深色遮罩上更亮一点）
   kind: { type: String, default: 'isle' },
+  // 'v' 竖排（岛屿页）/ 'h' 横排（房间页）
+  layout: { type: String, default: 'v' },
   // 选中后显示的一行小提示，比如「再点一次进入这座岛」
   hint: { type: String, default: '' },
 })
@@ -71,8 +109,26 @@ const props = defineProps({
 defineEmits(['pick', 'hover'])
 
 const scrollEl = ref(null)
+const canLeft = ref(false)
+const canRight = ref(false)
 
-// 选中项自动滚到中间：手动算 top 而不是 scrollIntoView ——
+function refreshArrows() {
+  const el = scrollEl.value
+  if (!el || props.layout !== 'h') return
+  canLeft.value = el.scrollLeft > 4
+  canRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 4
+}
+// 箭头一次滚「差不多一屏的 0.7」，慢慢挪反而要点很多下
+function scrollH(dir) {
+  const el = scrollEl.value
+  if (!el) return
+  el.scrollBy({ left: dir * Math.max(180, el.clientWidth * 0.7), behavior: 'smooth' })
+}
+
+onMounted(refreshArrows)
+
+// 选中项自动滚到中间。
+// 竖排手动算 top / 横排手动算 left，而不是 scrollIntoView ——
 // scrollIntoView 会连带滚动整个页面（岛屿页整页是可拖的云海，滚一下就跑偏）。
 watch(
   () => props.activeId,
@@ -82,8 +138,22 @@ watch(
     const box = scrollEl.value
     const node = box?.querySelector('.mtl-node.on')
     if (!box || !node) return
-    const top = node.offsetTop - box.clientHeight / 2 + node.offsetHeight / 2
-    box.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+    if (props.layout === 'h') {
+      const left = node.offsetLeft - box.clientWidth / 2 + node.offsetWidth / 2
+      box.scrollTo({ left: Math.max(0, left), behavior: 'smooth' })
+    } else {
+      const top = node.offsetTop - box.clientHeight / 2 + node.offsetHeight / 2
+      box.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+    }
+  }
+)
+
+// 条数变了（新建/删除记忆）箭头可用状态要重算
+watch(
+  () => props.nodes.length,
+  async () => {
+    await nextTick()
+    refreshArrows()
   }
 )
 </script>
@@ -97,14 +167,14 @@ watch(
   --mtl-halo: rgba(255, 196, 132, 0.85);
 
   /* 全站没有全局 border-box（默认 content-box），这里必须自己声明一次：
-     否则 padding 不计入 max-height，房间页算好的「可用高度」会被多撑出去 21px，
-     矮屏下正好压到下方陈列条上。 */
+     否则 padding 不计入 max-height，房间页算好的「可用高度」会被多撑出去 21px。
+     ★ 横排也用得上：宽度 100% + 左右 padding，不写就会横向溢出 20px。 */
   box-sizing: border-box;
   width: 200px;
   padding: 11px 8px 10px 16px;
   border-radius: 16px;
-  /* 刻意做得很淡：这条常压在画面内容上（岛屿页压着最右那座岛的画面，
-     房间页压着 3D 画布），底色一重就变成"贴了张不透明卡片"。
+  /* 刻意做得很淡：这条常压在画面内容上（岛屿页压着最右那座岛的画面），
+     底色一重就变成"贴了张不透明卡片"。
      不用 backdrop-filter —— 房间页那层下面是 canvas，模糊整块画布很贵。 */
   background: linear-gradient(180deg, rgba(255, 252, 246, 0.34), rgba(255, 246, 235, 0.14));
   border: 1px solid rgba(255, 255, 255, 0.42);
@@ -284,7 +354,7 @@ watch(
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 206, 140, 0.9);
+  border: 1.5px solid rgba(251, 176, 67);
   animation: mtl-ping 2.6s ease-out infinite;
   pointer-events: none;
 }
@@ -366,6 +436,245 @@ watch(
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14);
 }
 
+/* ================= 横排（3D 房间页底部） =================
+   配色按用户给的三色定：
+     高亮 #FBB043 = rgb(251,176,67)、连线 #FEECCD = rgb(254,236,205)、
+     发光/阴影全部由高亮色带透明度派生（暖光压在暖色房间里，用纯黑阴影会发灰）。
+   小图就是时间线上的"点"：36px 圆，选中那一颗描边 + 外发光 + 放大 1.08。 */
+.mtl-h {
+  --mth-th: 36px; /* 小图直径，竖线高度、行高都跟着它走 */
+  --mth-pad: 2px; /* 列表上内边距 */
+  --mth-on: rgb(251, 176, 67);
+  --mth-line: rgb(254, 236, 205);
+
+  /* 宽度跟着内容走（最多撑满）：5 条时条子只有 ~450px，右侧不会留一大片空面板；
+     条数多到放不下时 max-width 兜住，交给 .mth-scroll 横滚。 */
+  width: fit-content;
+  max-width: 100%;
+  padding: 7px 10px 6px;
+  border-radius: 14px;
+  /* 底下那层已经是 .room-gallery 的深色渐隐，这里再压太实就成一块黑板了 */
+  background: linear-gradient(180deg, rgba(46, 36, 30, 0.42), rgba(46, 36, 30, 0.2));
+  border: 1px solid rgba(255, 226, 190, 0.2);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
+}
+.mth-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 2px 1px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 236, 214, 0.86);
+}
+.mth-head .mtl-count {
+  /* 基础样式里的 margin-left:auto 在横排要让位给右边的箭头，
+     否则两边都 auto，条数角标会被顶到整条的正中间。 */
+  margin-left: 0;
+  background: rgba(255, 226, 190, 0.18);
+}
+.mth-arrows {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  pointer-events: auto;
+}
+.mth-arrow {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 226, 190, 0.3);
+  background: rgba(58, 42, 32, 0.5);
+  color: var(--mth-line);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+.mth-arrow:hover:not(:disabled) {
+  background: var(--mth-on);
+  border-color: var(--mth-on);
+  color: #3a2a1c;
+}
+.mth-arrow:disabled {
+  opacity: 0.26;
+  cursor: default;
+}
+
+.mth-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  /* ★ 这条要吃事件：手机上要能直接拖、桌面滚轮要能滚。
+     它已经落在底部陈列条那块覆盖层里（不是 3D 拖视角的主区域），拦下拖拽不吃亏；
+     竖排那条就不行 —— 它压在画布中间，挡住就没法转视角了。 */
+  pointer-events: auto;
+}
+.mth-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* 横线挂在 ul 上（不是滚动容器上）：容器的绝对定位子元素只按可视宽度铺开，
+   条数一多线就断在半路；挂 ul 上才是整条内容的宽度。 */
+.mth-list {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin: 0;
+  padding: var(--mth-pad) 6px 0;
+  list-style: none;
+}
+.mth-line {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: calc(var(--mth-pad) + var(--mth-th) / 2);
+  height: 1.5px;
+  background: linear-gradient(
+    90deg,
+    rgba(254, 236, 205, 0) 0%,
+    var(--mth-line) 6%,
+    var(--mth-line) 94%,
+    rgba(254, 236, 205, 0) 100%
+  );
+  pointer-events: none;
+}
+
+.mth-node {
+  flex: 0 0 auto;
+  width: 72px;
+}
+.mth-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.mth-thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--mth-th);
+  height: var(--mth-th);
+  margin-bottom: 3px;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1.5px solid rgba(254, 236, 205, 0.55);
+  background: rgba(255, 232, 208, 0.16);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1), border-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+.mth-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.mth-ph {
+  font-size: 15px;
+  font-style: normal;
+  line-height: 1;
+}
+.mth-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(254, 236, 205, 0.8);
+}
+.mth-name {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: rgba(255, 242, 228, 0.82);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: color 0.2s ease, font-size 0.2s ease;
+}
+.mth-date {
+  font-size: 10px;
+  font-style: normal;
+  color: rgba(255, 238, 220, 0.46);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.mth-btn:hover .mth-thumb {
+  border-color: rgba(251, 176, 67, 0.85);
+  transform: scale(1.06);
+}
+.mth-btn:hover .mth-name {
+  color: #fff6e8;
+}
+.mth-btn:focus-visible {
+  outline: 2px solid rgba(251, 176, 67, 0.9);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+
+/* ---- 当前项 ---- */
+.mth-node.on .mth-thumb {
+  border-color: var(--mth-on);
+  transform: scale(1.1);
+  /* 内环 + 一圈淡环 + 外发光：小图只有 36px，单靠 1.5px 描边在暖色房间上认不出来 */
+  box-shadow: inset 0 0 0 1px var(--mth-on), 0 0 0 4px rgba(251, 176, 67, 0.28),
+    0 0 22px 4px rgba(251, 176, 67, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.mth-node.on .mth-name {
+  color: #fff6e8;
+  font-weight: 700;
+  font-size: 12px;
+}
+.mth-node.on .mth-date {
+  color: rgba(251, 176, 67, 0.92);
+}
+
+/* 矮屏（720p 笔记本 / 分屏）：时间线从 114px 压到 ~86px，给 3D 画面腾地方。
+   ★ 这条只压横排；竖排的高度本来就由页面自己卡（岛屿页 52vh）。 */
+@media (max-height: 800px) {
+  .mtl-h {
+    --mth-th: 30px;
+    padding: 5px 9px 4px;
+  }
+  .mth-name {
+    font-size: 11px;
+  }
+  .mth-date {
+    display: none;
+  }
+}
+
+/* 矮屏（720p 笔记本 / 分屏）：时间线从 114px 压到 ~86px，给 3D 画面腾地方。
+   ★ 这条只压横排；竖排的高度本来就由页面自己卡（岛屿页 52vh）。 */
+@media (max-height: 800px) {
+  .mtl-h {
+    --mth-th: 30px;
+    padding: 5px 9px 4px;
+  }
+  .mth-name {
+    font-size: 11px;
+  }
+  .mth-date {
+    display: none;
+  }
+}
+
 /* 手机上收窄：只留名字（日期藏起来），圆点仍贴右边缘。
    ★ 不要做成「只显示圆点、选中才出名字」—— 没有选中项时那一列就是七个点，
      用户看不出这条是干什么的。宁可名字截断，也要能一眼读出是哪些记忆。 */
@@ -396,6 +705,35 @@ watch(
   .mtl-hint {
     display: none;
   }
+
+  /* 横排：小图缩到 30px，日期整行去掉（手机上 4 行字会占掉半个陈列条） */
+  .mtl-h {
+    --mth-th: 30px;
+    width: 100%;
+    max-width: 100%;
+    padding: 6px 8px 5px;
+    border-radius: 12px;
+  }
+  .mth-head {
+    font-size: 10.5px;
+  }
+  .mth-arrow {
+    width: 26px;
+    height: 26px;
+  }
+  .mth-list {
+    gap: 10px;
+  }
+  .mth-node {
+    width: 62px;
+  }
+  .mth-name {
+    max-width: 62px;
+    font-size: 10.5px;
+  }
+  .mth-date {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -404,7 +742,9 @@ watch(
     opacity: 0;
   }
   .mtl-btn,
-  .mtl-dot {
+  .mtl-dot,
+  .mth-btn,
+  .mth-thumb {
     transition: none;
   }
 }
