@@ -800,6 +800,9 @@ const CAT_THOUGHTS = [
 }
 
 /* ---------- 翻页省略号 ---------- */
+/* 翻页按钮：原来是白底棕字，压在奶油色云海上几乎看不出来是"能点的东西"。
+   改成时间线那套橙金色 rgb(251,176,67)：跟高亮、连线是同一组颜色，
+   用户扫一眼就知道这个圆点和时间线上那个亮着的是同一个系统。 */
 .isle-more {
   position: absolute;
   top: 50%;
@@ -809,14 +812,19 @@ const CAT_THOUGHTS = [
   height: 42px;
   border-radius: 50%;
   border: 0;
-  background: rgba(255, 255, 255, 0.78);
-  color: #6b5540;
+  background: rgb(251, 176, 67);
+  color: #fff;
   font-size: 20px;
   cursor: pointer;
-  box-shadow: 0 6px 16px rgba(60, 40, 20, 0.2);
+  box-shadow: 0 6px 18px rgba(214, 138, 40, 0.42), 0 0 22px rgba(251, 176, 67, 0.34);
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 .isle-more:hover {
-  background: #fff;
+  background: rgb(253, 190, 92);
+  box-shadow: 0 8px 22px rgba(214, 138, 40, 0.5), 0 0 28px rgba(251, 176, 67, 0.46);
+}
+.isle-more:active {
+  transform: translateY(-50%) scale(0.94);
 }
 .isle-more-l {
   left: 18px;
@@ -1421,9 +1429,12 @@ const CAT_THOUGHTS = [
     transform: scale(1.03);
   }
 }
+/* 聚焦那座岛打的是橙金色的光（rgb(251,176,67)），跟时间线的高亮同一套颜色。
+   原来是纯白光 —— 这片背景本身就是奶油色云海，白光等于没做；
+   橙色饱和度高得多，在暖色底上反而更"跳"，远处那座岛也能一眼认出来。 */
 .isle-slot.focused .isle-art {
-  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 28px rgba(255, 255, 255, 0.72))
-    drop-shadow(0 18px 26px rgba(90, 80, 110, 0.34));
+  filter: drop-shadow(0 0 9px rgba(255, 232, 190, 0.98)) drop-shadow(0 0 26px rgba(251, 176, 67, 0.92))
+    drop-shadow(0 0 52px rgba(251, 176, 67, 0.55)) drop-shadow(0 18px 26px rgba(90, 80, 110, 0.34));
   /* 1.14 而不是 1.08：悬停本来就有 1.07 的放大，
      选中和悬停拉不开差距的话，用户分不清"鼠标扫过"和"被时间线选中"。 */
   transform: scale(1.14) translateY(-10px);

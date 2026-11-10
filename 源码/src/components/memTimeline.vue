@@ -21,37 +21,42 @@
     <div class="mth-head">
       <span class="mtl-title">{{ label }}</span>
       <span class="mtl-count">{{ nodes.length }}</span>
+    </div>
+
+    <!-- 箭头跟小图排在同一行的最右端（垂直居中于圆心）。
+         放在滚动区外面当兄弟节点，而不是绝对定位压上去：
+         压在内容上就得给滚动区补 padding-right，最后一屏会多出一块空白。 -->
+    <div class="mth-body">
+      <div ref="scrollEl" class="mth-scroll" @scroll="refreshArrows">
+        <ul class="mth-list">
+          <span class="mth-line" aria-hidden="true"></span>
+          <li v-for="n in nodes" :key="n.id" class="mtl-node mth-node" :class="{ on: n.id === activeId }">
+            <button
+              class="mth-btn"
+              type="button"
+              :title="n.title"
+              @click="$emit('pick', n.id)"
+              @mouseenter="$emit('hover', n.id)"
+              @mouseleave="$emit('hover', null)"
+              @focus="$emit('hover', n.id)"
+              @blur="$emit('hover', null)"
+            >
+              <span class="mth-thumb">
+                <img v-if="n.cover" :src="n.cover" alt="" loading="lazy" />
+                <!-- 没有 AI 封面时用家具图标兜底：圆形小图上一片空白比放个图标更难看 -->
+                <em v-else-if="n.emoji" class="mth-ph">{{ n.emoji }}</em>
+                <i v-else class="mth-dot"></i>
+              </span>
+              <b class="mth-name">{{ n.title }}</b>
+              <em class="mth-date">{{ n.date }}</em>
+            </button>
+          </li>
+        </ul>
+      </div>
       <span class="mth-arrows">
         <button type="button" class="mth-arrow" aria-label="向左" :disabled="!canLeft" @click="scrollH(-1)">‹</button>
         <button type="button" class="mth-arrow" aria-label="向右" :disabled="!canRight" @click="scrollH(1)">›</button>
       </span>
-    </div>
-
-    <div ref="scrollEl" class="mth-scroll" @scroll="refreshArrows">
-      <ul class="mth-list">
-        <span class="mth-line" aria-hidden="true"></span>
-        <li v-for="n in nodes" :key="n.id" class="mtl-node mth-node" :class="{ on: n.id === activeId }">
-          <button
-            class="mth-btn"
-            type="button"
-            :title="n.title"
-            @click="$emit('pick', n.id)"
-            @mouseenter="$emit('hover', n.id)"
-            @mouseleave="$emit('hover', null)"
-            @focus="$emit('hover', n.id)"
-            @blur="$emit('hover', null)"
-          >
-            <span class="mth-thumb">
-              <img v-if="n.cover" :src="n.cover" alt="" loading="lazy" />
-              <!-- 没有 AI 封面时用家具图标兜底：圆形小图上一片空白比放个图标更难看 -->
-              <em v-else-if="n.emoji" class="mth-ph">{{ n.emoji }}</em>
-              <i v-else class="mth-dot"></i>
-            </span>
-            <b class="mth-name">{{ n.title }}</b>
-            <em class="mth-date">{{ n.date }}</em>
-          </button>
-        </li>
-      </ul>
     </div>
   </div>
 
@@ -163,8 +168,9 @@ watch(
   --mtl-ink: #5b4433;
   --mtl-ink-dim: rgba(91, 68, 51, 0.66);
   --mtl-dot-off: rgba(120, 92, 70, 0.42);
-  --mtl-dot-on: #fff;
-  --mtl-halo: rgba(255, 196, 132, 0.85);
+  /* 当前项的点 / 光环统一用 rgb(251,176,67)：和小岛翻页按钮、房间时间线的高亮同色 */
+  --mtl-dot-on: rgb(251, 176, 67);
+  --mtl-halo: rgba(251, 176, 67, 0.78);
 
   /* 全站没有全局 border-box（默认 content-box），这里必须自己声明一次：
      否则 padding 不计入 max-height，房间页算好的「可用高度」会被多撑出去 21px。
@@ -442,7 +448,7 @@ watch(
      发光/阴影全部由高亮色带透明度派生（暖光压在暖色房间里，用纯黑阴影会发灰）。
    小图就是时间线上的"点"：36px 圆，选中那一颗描边 + 外发光 + 放大 1.08。 */
 .mtl-h {
-  --mth-th: 36px; /* 小图直径，竖线高度、行高都跟着它走 */
+  --mth-th: 46px; /* 小图直径，横线高度、行高都跟着它走 */
   --mth-pad: 2px; /* 列表上内边距 */
   --mth-on: rgb(251, 176, 67);
   --mth-line: rgb(254, 236, 205);
@@ -451,8 +457,8 @@ watch(
      条数多到放不下时 max-width 兜住，交给 .mth-scroll 横滚。 */
   width: fit-content;
   max-width: 100%;
-  padding: 7px 10px 6px;
-  border-radius: 14px;
+  padding: 9px 12px 8px;
+  border-radius: 16px;
   /* 底下那层已经是 .room-gallery 的深色渐隐，这里再压太实就成一块黑板了 */
   background: linear-gradient(180deg, rgba(46, 36, 30, 0.42), rgba(46, 36, 30, 0.2));
   border: 1px solid rgba(255, 226, 190, 0.2);
@@ -462,42 +468,55 @@ watch(
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 2px 1px;
-  font-size: 11px;
+  margin: 0 2px 6px;
+  font-size: 11.5px;
   letter-spacing: 0.08em;
   color: rgba(255, 236, 214, 0.86);
 }
 .mth-head .mtl-count {
-  /* 基础样式里的 margin-left:auto 在横排要让位给右边的箭头，
-     否则两边都 auto，条数角标会被顶到整条的正中间。 */
-  margin-left: 0;
   background: rgba(255, 226, 190, 0.18);
 }
-.mth-arrows {
+
+/* 一行 = 滚动区 + 右端箭头。箭头不再放标题行：标题行只有一行字那么高，
+   箭头跟小图对不齐，看着像"挂"在上面。 */
+.mth-body {
   display: flex;
-  gap: 4px;
-  margin-left: auto;
+  align-items: flex-start;
+  gap: 3px;
+}
+.mth-arrows {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  /* 与小图圆心对齐：列表上内边距 + 小图半径 - 箭头半高(13) */
+  margin-top: calc(var(--mth-pad) + (var(--mth-th) - 26px) / 2);
   pointer-events: auto;
 }
+/* 只有箭头本身，没有圆底也没有描边（用户明确不要那个框）：
+   底色一去掉它就跟连线一个颜色，看起来是"线的两端"，而不是两个按钮。 */
 .mth-arrow {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   padding: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 226, 190, 0.3);
-  background: rgba(58, 42, 32, 0.5);
+  border: 0;
+  border-radius: 8px;
+  background: none;
   color: var(--mth-line);
-  font-size: 13px;
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  transition: color 0.18s ease, transform 0.18s ease;
 }
 .mth-arrow:hover:not(:disabled) {
-  background: var(--mth-on);
-  border-color: var(--mth-on);
-  color: #3a2a1c;
+  color: var(--mth-on);
+  transform: scale(1.16);
+}
+.mth-arrow:focus-visible {
+  outline: 2px solid var(--mth-on);
+  outline-offset: -2px;
 }
 .mth-arrow:disabled {
   opacity: 0.26;
@@ -505,6 +524,8 @@ watch(
 }
 
 .mth-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
@@ -525,9 +546,9 @@ watch(
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 14px;
+  gap: 20px;
   margin: 0;
-  padding: var(--mth-pad) 6px 0;
+  padding: var(--mth-pad) 8px 0;
   list-style: none;
 }
 .mth-line {
@@ -548,13 +569,13 @@ watch(
 
 .mth-node {
   flex: 0 0 auto;
-  width: 72px;
+  width: 90px;
 }
 .mth-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   width: 100%;
   padding: 0;
   border: 0;
@@ -570,7 +591,7 @@ watch(
   place-items: center;
   width: var(--mth-th);
   height: var(--mth-th);
-  margin-bottom: 3px;
+  margin-bottom: 5px;
   overflow: hidden;
   border-radius: 50%;
   border: 1.5px solid rgba(254, 236, 205, 0.55);
@@ -586,7 +607,7 @@ watch(
   object-fit: cover;
 }
 .mth-ph {
-  font-size: 15px;
+  font-size: 20px;
   font-style: normal;
   line-height: 1;
 }
@@ -597,18 +618,18 @@ watch(
   background: rgba(254, 236, 205, 0.8);
 }
 .mth-name {
-  max-width: 72px;
+  max-width: 90px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   color: rgba(255, 242, 228, 0.82);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   transition: color 0.2s ease, font-size 0.2s ease;
 }
 .mth-date {
-  font-size: 10px;
+  font-size: 11px;
   font-style: normal;
   color: rgba(255, 238, 220, 0.46);
   font-variant-numeric: tabular-nums;
@@ -632,46 +653,31 @@ watch(
 .mth-node.on .mth-thumb {
   border-color: var(--mth-on);
   transform: scale(1.1);
-  /* 内环 + 一圈淡环 + 外发光：小图只有 36px，单靠 1.5px 描边在暖色房间上认不出来 */
+  /* 内环 + 一圈淡环 + 外发光：单靠 1.5px 描边在暖色房间上认不出来 */
   box-shadow: inset 0 0 0 1px var(--mth-on), 0 0 0 4px rgba(251, 176, 67, 0.28),
     0 0 22px 4px rgba(251, 176, 67, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .mth-node.on .mth-name {
   color: #fff6e8;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 13px;
 }
 .mth-node.on .mth-date {
   color: rgba(251, 176, 67, 0.92);
 }
 
-/* 矮屏（720p 笔记本 / 分屏）：时间线从 114px 压到 ~86px，给 3D 画面腾地方。
+/* 矮屏（720p 笔记本 / 分屏）：整条往回收一档，给 3D 画面多留些地方。
    ★ 这条只压横排；竖排的高度本来就由页面自己卡（岛屿页 52vh）。 */
 @media (max-height: 800px) {
   .mtl-h {
-    --mth-th: 30px;
-    padding: 5px 9px 4px;
+    --mth-th: 38px;
+    padding: 7px 10px 6px;
   }
   .mth-name {
-    font-size: 11px;
+    font-size: 11.5px;
   }
   .mth-date {
-    display: none;
-  }
-}
-
-/* 矮屏（720p 笔记本 / 分屏）：时间线从 114px 压到 ~86px，给 3D 画面腾地方。
-   ★ 这条只压横排；竖排的高度本来就由页面自己卡（岛屿页 52vh）。 */
-@media (max-height: 800px) {
-  .mtl-h {
-    --mth-th: 30px;
-    padding: 5px 9px 4px;
-  }
-  .mth-name {
-    font-size: 11px;
-  }
-  .mth-date {
-    display: none;
+    font-size: 10.5px;
   }
 }
 
@@ -706,9 +712,9 @@ watch(
     display: none;
   }
 
-  /* 横排：小图缩到 30px，日期整行去掉（手机上 4 行字会占掉半个陈列条） */
+  /* 横排：小图缩到 36px，日期整行去掉（手机上 4 行字会占掉半个底部条） */
   .mtl-h {
-    --mth-th: 30px;
+    --mth-th: 36px;
     width: 100%;
     max-width: 100%;
     padding: 6px 8px 5px;
@@ -718,18 +724,19 @@ watch(
     font-size: 10.5px;
   }
   .mth-arrow {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
+    font-size: 18px;
   }
   .mth-list {
     gap: 10px;
   }
   .mth-node {
-    width: 62px;
+    width: 70px;
   }
   .mth-name {
-    max-width: 62px;
-    font-size: 10.5px;
+    max-width: 70px;
+    font-size: 11px;
   }
   .mth-date {
     display: none;

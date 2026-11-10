@@ -1414,12 +1414,19 @@ const filtered = computed(() => {
   box-sizing: border-box;
 }
 
+/* ★ 2026-11-10 用户给的参考图：整页就是这一张画 —— 上面是天空和云里的房子，
+   往下接过山峦、云海、石阶草地，一条连续的画面，中间没有分界。
+   所以背景挂在最外层，而不是像之前那样只铺「横幅以下」的内容区：
+   横幅和图各占一块时，交界处那条水平硬边一眼就看得出是两张图拼的。
+   ★ cover + center top：原图 1672×663，16:9 的桌面按高铺满（左右各裁 ~400px），
+     天空到草地整条竖切都在画面里，构图和参考图一致。
+   ★ 背景放在非滚动容器上，内容滚动时图原地不动，卡片从画面上滑过去。 */
 .square {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: #f5f6f8;
+  background: url('../assets/opt/backgroundbody.webp') center top / cover no-repeat, #f5f6f8;
 }
 
 /* 横幅: 取背景图顶部天空岛一段, 宽度撑满等比裁切 */
@@ -1436,8 +1443,33 @@ const filtered = computed(() => {
   aspect-ratio: 1446 / 272;
   max-height: min(42%, 272px);
   min-height: 110px;
-  background: url('../assets/opt/squareBackground.webp') top center / 100% auto no-repeat;
   overflow: hidden;
+}
+/* 横幅（烘焙了「拾光广场」标题、搜索胶囊、右上角那句标语）铺在伪元素上，
+   而不是直接写 .sq-hero 的 background —— 因为要给它的底边做渐隐，
+   而 mask 对整个元素生效会连搜索框、右上角热点一起淡掉。
+   渐隐这 130px 露出的是下面 .square 那张画在同一位置的天空：
+   两张图都是暖粉色的云，叠成一条过渡带，看不出是拼的。 */
+.sq-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('../assets/opt/squareBackground.webp') top center / 100% auto no-repeat;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    #000 calc(100% - 130px),
+    rgba(0, 0, 0, 0.62) calc(100% - 74px),
+    rgba(0, 0, 0, 0.22) calc(100% - 30px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    #000 calc(100% - 130px),
+    rgba(0, 0, 0, 0.62) calc(100% - 74px),
+    rgba(0, 0, 0, 0.22) calc(100% - 30px),
+    transparent 100%
+  );
+  pointer-events: none;
 }
 
 /* 横幅装饰层: 不动烘焙图本体, 避免搜索/发布热区错位 */
@@ -1596,16 +1628,8 @@ const filtered = computed(() => {
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #d3d9e2 transparent;
-  /* ★ 主内容区背景（2026-11-10 用户给图）：原来是纯 #f5f6f8 的平面底，
-     白卡片像浮在一张灰纸上。换成这张横向场景图，铺满「横幅以下」的整块内容区。
-     ★ 直接写在本元素上，不另开一层 div：滚动容器自己的背景默认**不跟内容滚**
-       （background-attachment: scroll 是相对元素边框盒，不是相对文档），
-       滚动时图原地不动、卡片从上面滑过去，就是想要的"贴着一张画"的效果；
-       也没用 fixed —— iOS Safari 对 fixed 背景支持不好，会缩放错位。
-     ★ center top + cover：原图 1672×663（2.52:1），桌面这块约 1440×630，
-       按高铺满后左右各裁 70 来像素，夕阳、山峦、石阶、栅栏都还在画面里。
-     ★ 底下一层 #f5f6f8 兜底：图还没加载完时不至于闪白。 */
-  background: url('../assets/opt/backgroundbody.webp') center top / cover no-repeat, #f5f6f8;
+  /* 背景不在这一层：图挂在外层 .square 上，横幅和内容区共用同一张画，
+     这样两者的交界处才是连续的，而不是上下两张图各铺一块。 */
 }
 
 .sq-body::-webkit-scrollbar {
@@ -3398,8 +3422,13 @@ button.p-avatar:hover {
     height: 148px;
     min-height: 0;
     max-height: none;
-    /* 320% + 58%/14%：实测这组只框到「风车小屋 + 石桥」那段插画，
-       完全避开烤在图里的标题、搜索胶囊和右上角那句手写字 */
+  }
+  /* 图在伪元素上，所以尺寸和渐隐都要写到这里：
+     ★ 320% + 58%/14% 这组只框到「风车小屋 + 石桥」那段插画，完全避开烤在图里的
+       标题、搜索胶囊和右上角那句手写字（竖屏照桌面那套 100% auto 铺会把标题糊成一团）。
+     ★ 渐隐只留最后 38%：桌面用的 130px 融合带在 148px 高的条子上等于把图整条吃掉。
+       文字版标题 .sq-h-m 是 DOM 元素，不受这条 mask 影响。 */
+  .sq-hero::before {
     background-size: 320% auto;
     background-position: 58% 14%;
     -webkit-mask-image: linear-gradient(180deg, #000 62%, transparent 100%);
@@ -3430,8 +3459,8 @@ button.p-avatar:hover {
     background: linear-gradient(
       90deg,
       rgba(250, 246, 242, 0.97) 0%,
-      rgba(250, 246, 242, 0.88) 44%,
-      rgba(250, 246, 242, 0.16) 76%,
+      rgba(250, 246, 242, 0.92) 52%,
+      rgba(250, 246, 242, 0.42) 74%,
       rgba(250, 246, 242, 0) 100%
     );
     pointer-events: none;

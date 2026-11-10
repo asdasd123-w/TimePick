@@ -96,19 +96,14 @@
       </div>
     </div>
 
-    <!-- 房间物品：只保留「图片陈列」在 3D 房间下方（按需求不可隐藏）。
-         每张卡片：标题在上、大图在下、鼠标移上去高亮；卡片之间留大间距，
-         条数超出一屏时左右滑动（触屏拖、桌面点两端箭头）。 -->
+    <!-- 记忆时间线（横排）：这座岛上的记忆按「事情发生的那天」从早到晚串成一条横线，
+         每个节点是这个物品的圆形小图。点一条 = 弹出这条记忆的详情
+         （和点 3D 家具走同一条 openItem 路径，不会出现两套详情）。
+         ★ 2026-11-10 按需求删掉了原来那条「房间物品」卡片陈列条 ——
+           连同它的左右箭头、滚动居中定位、picked 高亮样式一起删。
+           理由：时间线本身已经把物品小图、名字、日期都显示了，
+           两套"看有哪些记忆"的入口叠在底部，只是把 3D 画面往下压。 -->
     <div v-if="built && listItems.length && !booting" class="room-gallery">
-      <div class="rg-head">
-        <span class="rg-title">房间物品</span>
-        <span class="rg-num">{{ listItems.length }}{{ maxItems ? '/' + maxItems : '' }}</span>
-        <span class="rg-hint">点一张打开这条记忆 · 可左右滑动</span>
-      </div>
-
-      <!-- 记忆时间线（横排）：这座岛上的记忆按「事情发生的那天」从早到晚串成一条横线，
-           每个节点是这个物品的圆形小图。点一条 = 弹详情 + 底部卡片滑到眼前
-           （和点 3D 家具、点卡片走同一条 openItem 路径，不会出现两套详情）。 -->
       <MemTimeline
         v-if="memNodes.length"
         class="room-timeline"
@@ -119,49 +114,7 @@
         :active-id="pickedId"
         @pick="jumpToItem"
       />
-
-      <div class="rg-strip">
-        <button
-          class="rg-arrow left"
-          type="button"
-          aria-label="向左"
-          :disabled="!canLeft"
-          @click="scrollStrip(-1)"
-        >
-          ‹
-        </button>
-        <div ref="stripRef" class="rg-scroll" @scroll="onStripScroll">
-          <button
-            v-for="it in listItems"
-            :key="it.item_id"
-            type="button"
-            class="rg-card"
-            :class="{ picked: pickedId === it.item_id }"
-            @click="openItem(it)"
-          >
-            <span class="rg-card-title">{{ it.title || '（无标题）' }}</span>
-            <span class="rg-card-pic">
-              <img v-if="coverOf(it)" :src="coverOf(it)" alt="" loading="lazy" />
-              <!-- 没有 AI 封面的记忆用淡色块 + 家具图标兜底，卡片仍然等高 -->
-              <span v-else class="rg-card-ph">{{ furnitureEmoji(it.furniture) }}</span>
-            </span>
-            <!-- ★ 2026-10-27 用户要求：卡片下面的「家具名 + 摆放位置」不再显示，只留图片。
-                 这里不写 <span class="rg-card-foot">，CSS 一并保留注释说明原因。 -->
-          </button>
-        </div>
-        <button
-          class="rg-arrow right"
-          type="button"
-          aria-label="向右"
-          :disabled="!canRight"
-          @click="scrollStrip(1)"
-        >
-          ›
-        </button>
-      </div>
     </div>
-
-    <!-- 记忆时间线已挪到下面「房间物品」那一块里，改成横排（见 .room-gallery 内）。 -->
 
     <!-- 点 3D 家具后，iframe 通过 postMessage 通知此处弹出该记忆的详情浮层 -->
     <transition name="fade">
@@ -493,7 +446,6 @@ let quoteTimer = 0
 
 const propMap = ref({}) // itemId -> 该记忆的摆件数据（含 media）
 // 每个空间的物品上限与场景自带家具数量（都由后端 room/layout 下发）
-const maxItems = ref(0)
 const fixedCount = ref(0)
 const detail = ref(null)
 const tipText = ref('')
@@ -678,33 +630,6 @@ function coverOf(it) {
   return it?.ai_cover ? mediaSrc(it.ai_cover) : ''
 }
 
-const stripRef = ref(null)
-const canLeft = ref(false)
-const canRight = ref(false)
-function refreshStripArrows() {
-  const el = stripRef.value
-  if (!el) {
-    canLeft.value = false
-    canRight.value = false
-    return
-  }
-  canLeft.value = el.scrollLeft > 4
-  canRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 4
-}
-function onStripScroll() {
-  refreshStripArrows()
-}
-// 箭头一次滚「差不多两屏」的量，慢慢挪反而要点很多下
-function scrollStrip(dir) {
-  const el = stripRef.value
-  if (!el) return
-  el.scrollBy({ left: dir * Math.max(240, el.clientWidth * 0.8), behavior: 'smooth' })
-}
-watch(listItems, async () => {
-  await nextTick()
-  refreshStripArrows()
-})
-
 // ---- 镜头视角快捷定位（小屋 / 室内 / 花园 / 书桌 / 岛体）----
 // 图标是自己画的极简线稿（不直接切用户截图）。key 与 Cocos 侧 CameraRig 的预设名一一对应。
 const VIEWS = [
@@ -755,10 +680,8 @@ function goView(key) {
 // 而不是走到物品自己的坐标（那个坐标在桌面高度上，猫是走不过去的）。
 const fixedFurniture = ref([])
 
-// ★ 2026-10-27：底部「房间物品」卡片点了要有明显反馈。
-// 原来只有 :active 的 1px 缩放（点完弹层立刻盖上来，等于完全没反馈）。
-// 这里记住被点的那张卡并**一直保持**（只在下一次点别的卡时切换）——
-// 早先试过 1.6s 后自动熄灭，但关掉浮层往往已经超时，等于白加；常亮反而像"当前正在看这条"。
+// 当前正在看的这条记忆：时间线用它做高亮，点 3D 家具、点时间线节点都会写这里。
+// 一直保持（只在下一次点别的记忆时切换）—— 关掉浮层后仍能一眼看出"刚看的是哪条"。
 const pickedId = ref(null)
 function openItem(it) {
   pickedId.value = it.item_id
@@ -790,21 +713,12 @@ const memNodes = computed(() => {
   }))
 })
 
-// 点时间线上的某一条：先弹详情，再把「房间物品」横条滑到那张卡片并居中。
-// 只弹详情不挪横条的话，卡片还躺在屏幕外，用户回头找不到"刚点的是哪一条"。
+// 点时间线上的某一条：弹这条记忆的详情。
+// （陈列条删掉后不用再"把卡片滑到眼前"——时间线自己就会把选中节点滚到中间）
 function jumpToItem(id) {
   const it = propMap.value[id]
   if (!it) return
   openItem(it)
-  nextTick(() => centerCardOnStrip(id))
-}
-function centerCardOnStrip(id) {
-  const el = stripRef.value
-  if (!el) return
-  const idx = listItems.value.findIndex((x) => x.item_id === id)
-  const card = el.children[idx]
-  if (!card) return
-  el.scrollTo({ left: card.offsetLeft - (el.clientWidth - card.offsetWidth) / 2, behavior: 'smooth' })
 }
 
 // ---- 3D 小猫的互动层（菜单 / 气泡 / 找找内容）----
@@ -987,7 +901,6 @@ async function loadLayout() {
     // 固定家具留一份带坐标的副本（找找内容要拿它当"走到旁边"的落点）
     fixedFurniture.value = (data.fixed || []).filter((f) => Number.isFinite(f.x) && Number.isFinite(f.z))
     // 每个空间的物品上限（后端给的权威值；固定家具床/桌/椅/柜不计入）
-    maxItems.value = Number(data.max_items) || 0
     fixedCount.value = (data.fixed || []).length
   } catch (e) {
     // 服务端对「不存在 / 不是自己的空间」会回明确的业务错误，直接把原话显示出来，
@@ -1458,7 +1371,6 @@ onMounted(async () => {
   window.addEventListener('message', onMessage)
   window.addEventListener('keydown', onDinoKey)
   // 窗口尺寸变了，底部陈列条能滚多少也会变 —— 同步一下两端箭头的可用状态
-  window.addEventListener('resize', refreshStripArrows)
   // 顶部信息条的时钟 / 今日一句
   tickClock()
   clockTimer = setInterval(tickClock, 1000)
@@ -1490,7 +1402,6 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('message', onMessage)
   window.removeEventListener('keydown', onDinoKey)
-  window.removeEventListener('resize', refreshStripArrows)
   clearInterval(clockTimer)
   clearInterval(quoteTimer)
   dinoStop()
@@ -1782,223 +1693,25 @@ onUnmounted(() => {
   }
 }
 
-/* ============ 底部「房间物品」图片陈列条 ============
-   按需求：只保留图片陈列、不可隐藏、图尽量大、标题在上、hover 高亮、
-   卡片之间留大间距、太多时可左右滑动。压在画面底部，不挡 3D 拖动（只有卡片和箭头可点）。 */
+/* ============ 底部记忆时间线条 ============
+   ★ 2026-11-10：原来这里是一条「房间物品」大卡片陈列条，已按需求整条删除
+     （连同 .rg-* 的全部样式）。现在底部只剩一条横排时间线：
+     物品小图 + 名字 + 日期都在时间线上，3D 画面因此能往下多露出 ~200px。
+   容器本身不吃事件（pointer-events:none），只有时间线里的节点和箭头吃，
+   这样在条子空白处仍然能拖动视角。 */
 .room-gallery {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 6;
-  padding: 10px 12px 12px;
-  /* 由下往上的深色渐隐，让卡片浮在画面上但不生硬 */
-  background: linear-gradient(to top, rgba(18, 14, 11, 0.82), rgba(18, 14, 11, 0.55) 60%, rgba(18, 14, 11, 0));
+  padding: 0 12px 12px;
   pointer-events: none;
-}
-.rg-head {
+  /* 卡片陈列条删掉后，这条时间线只有 5~6 个节点的宽度（约 600px），
+     贴左会跟居中的 3D 画面完全脱节，看着像"挂在角落的一块东西"；
+     居中之后它就是画面正下方的一条轴。 */
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 0 4px 8px;
-  pointer-events: none;
-}
-.rg-title {
-  font-size: 13px;
-  letter-spacing: 1.2px;
-  color: #f7ece0;
-  /* 标题行正好在渐隐条的最上端（几乎全透明），底色一准是亮天空/云，
-     只靠颜色读不清 —— 加一层贴边阴影，任何背景上都立得住 */
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 14px rgba(0, 0, 0, 0.5);
-}
-.rg-num {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.2);
-  font-size: 11px;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-}
-.rg-hint {
-  font-size: 11px;
-  color: rgba(244, 233, 219, 0.85);
-  letter-spacing: 0.5px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-}
-.rg-strip {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.rg-scroll {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: flex-start;
-  /* 卡间距要大：需求里明确"每个图片之间空隙大一点" */
-  gap: 26px;
-  padding: 3px 6px 6px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
-  pointer-events: auto;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-}
-.rg-scroll::-webkit-scrollbar {
-  height: 6px;
-}
-.rg-scroll::-webkit-scrollbar-thumb {
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.26);
-}
-.rg-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.rg-card {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 216px;
-  padding: 0 0 6px;
-  border: none;
-  border-radius: 14px;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  scroll-snap-align: start;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-/* 标题在上（需求：标题写在上方） */
-.rg-card-title {
-  display: block;
-  overflow: hidden;
-  font-size: 12.5px;
-  line-height: 1.5;
-  letter-spacing: 0.5px;
-  color: #f0e3d3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  /* 卡片标题在渐隐条中段，底色可能是亮的云/岛，同样要压一层阴影 */
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 12px rgba(0, 0, 0, 0.45);
-}
-/* 大图：216 宽 × 164 高，等比裁切铺满，圆角柔和（"图尽量大一点"） */
-.rg-card-pic {
-  position: relative;
-  display: block;
-  width: 100%;
-  height: 164px;
-  overflow: hidden;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
-}
-.rg-card-pic img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  transition: transform 0.28s ease, filter 0.2s ease;
-}
-.rg-card-ph {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  /* ★ 2026-10-27 用户反馈「图标放大一点，与框框有点不匹配」：
-     34px 的图标放在 164 高的卡片里太空，放大到 76px 并加一圈柔光底，
-     让占位卡看起来是"一张图"而不是"一个小图标漂在大框里"。 */
-  font-size: 76px;
-  line-height: 1;
-  background:
-    radial-gradient(circle at 50% 46%, rgba(255, 236, 210, 0.5), rgba(255, 236, 210, 0) 62%),
-    linear-gradient(150deg, rgba(255, 226, 188, 0.26), rgba(255, 255, 255, 0.07));
-}
-.rg-card-foot {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  overflow: hidden;
-  font-size: 11px;
-  color: rgba(238, 226, 210, 0.78);
-  white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
-}
-.rg-card-sup {
-  padding: 0 5px;
-  border-radius: 4px;
-  background: rgba(255, 217, 168, 0.16);
-  font-style: normal;
-  color: #ffd9a8;
-}
-/* hover / 键盘聚焦：整体抬一下 + 图放大一点 + 标题变亮（"鼠标驻留后高亮"） */
-.rg-card:hover .rg-card-pic,
-.rg-card:focus-visible .rg-card-pic {
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42), 0 0 0 2px rgba(255, 205, 140, 0.85);
-}
-.rg-card:hover .rg-card-pic img,
-.rg-card:focus-visible .rg-card-pic img {
-  transform: scale(1.06);
-}
-.rg-card:hover .rg-card-title,
-.rg-card:focus-visible .rg-card-title {
-  color: #ffd9a8;
-}
-.rg-card:hover {
-  transform: translateY(-4px);
-}
-.rg-card:active {
-  transform: translateY(-1px) scale(0.99);
-}
-/* ★ 2026-10-27 用户反馈「最下面物体栏点击高亮不明显」：
-   hover 的那点描边在点击瞬间根本来不及看清（浮层马上盖上来）。点击后保留 1.6s：
-   ① 3px 橙金实描边 + 外圈大面积暖光；② 图片提亮并轻微放大；③ 内层暖光晕；
-   ④ 整张卡再上浮 1px、标题换成暖金色加粗。多层叠加，关掉浮层也能一眼找到刚才点的那张。 */
-.rg-card.picked {
-  transform: translateY(-5px);
-}
-.rg-card.picked .rg-card-pic {
-  box-shadow:
-    0 0 0 3px #ffc46a,
-    0 0 26px 4px rgba(255, 176, 92, 0.55),
-    0 14px 32px rgba(0, 0, 0, 0.48);
-}
-.rg-card.picked .rg-card-pic img {
-  transform: scale(1.05);
-  filter: brightness(1.14) saturate(1.08);
-}
-.rg-card.picked .rg-card-title {
-  color: #ffd08a;
-  font-weight: 600;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 14px rgba(255, 176, 92, 0.6);
-}
-.rg-card.picked .rg-card-ph {
-  box-shadow: inset 0 0 0 2px rgba(255, 196, 106, 0.75);
-}
-/* 两端箭头：只在还能滚的方向显示为可用 */
-.rg-arrow {
-  flex: none;
-  width: 30px;
-  height: 60px;
-  padding: 0;
-  border: none;
-  border-radius: 10px;
-  background: rgba(28, 22, 18, 0.66);
-  color: #f3e7d8;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: background 0.16s, opacity 0.16s;
-}
-.rg-arrow:hover:not(:disabled) {
-  background: rgba(28, 22, 18, 0.85);
-}
-.rg-arrow:disabled {
-  opacity: 0.25;
-  cursor: default;
+  justify-content: center;
 }
 
 /* AI 陪伴面板（与 index 布局里的 .ai-fixed 同一套定位；因为 room3d 是顶层路由，
@@ -2570,7 +2283,8 @@ onUnmounted(() => {
 }
 /* 高度跟着陈列条走：卡片去掉底部文字后整条从 275 降到 253，这里同步抬一下 */
 .cat-find.has-gallery {
-  bottom: 261px;
+  /* 底部条从「大卡片陈列」换成一条时间线后矮了一半，跟着往下落 */
+  bottom: 140px;
 }
 @keyframes cat-find-in {
   0% {
@@ -2668,7 +2382,8 @@ onUnmounted(() => {
 .room-tip {
   position: absolute;
   left: 50%;
-  bottom: 24px;
+  /* 底部只有一条时间线（约 132px）时，提示气泡要落在它上沿之外 */
+  bottom: 152px;
   transform: translateX(-50%);
   padding: 8px 18px;
   border-radius: 999px;
@@ -2691,28 +2406,13 @@ onUnmounted(() => {
   animation: none;
 }
 
-/* ---------- 记忆时间线（横排，夹在「房间物品」标题和卡片之间） ----------
-   ★ 原来是钉在右侧的竖排，位置靠 1440×900 实测的像素硬算（232~631 那段），
-     提示卡或陈列条一改高度就得回头重算，矮屏还要再写一份。
-     改成横排跟着陈列条往下排：高度由内容决定，不用再算边距，也不会压到任何东西。 */
+/* ---------- 记忆时间线（横排，贴底） ----------
+   ★ 早先是钉在右侧的竖排，位置靠 1440×900 实测像素硬算；后来挪进陈列条里跟着排；
+     现在陈列条删掉了，它就是底部唯一的东西，高度完全由内容决定，不用再算任何边距。 */
 .room-timeline {
   position: relative;
-  margin: 0 4px 8px;
+  margin: 0;
   z-index: 1;
-}
-/* 矮屏（720p）：陈列条 + 时间线一口气占掉一半高度，卡片图从 164 压到 118，
-   给 3D 画面腾回 46px。宽屏不受影响（1440×900 仍是 164）。 */
-@media (max-height: 800px) {
-  .rg-card-pic {
-    height: 118px;
-  }
-}
-/* 矮屏（720p）：陈列条 + 时间线一口气占掉一半高度，卡片图从 164 压到 118，
-   给 3D 画面腾回 46px。宽屏不受影响（1440×900 仍是 164）。 */
-@media (max-height: 800px) {
-  .rg-card-pic {
-    height: 118px;
-  }
 }
 /* ============ 手机端（≤767.98px）覆盖 UI ============
    只动这一层 HTML 覆盖物，Cocos 侧一行没改（触摸手势本来就有，见 CameraRig 的 TOUCH_MOVE）。
@@ -2791,19 +2491,14 @@ onUnmounted(() => {
     width: 12px;
     height: 20px;
   }
-  /* 底部陈列条：让出刘海屏/手势条的安全区，左右箭头抬到 40 宽 */
+  /* 底部条：让出刘海屏/手势条的安全区 */
   .room-gallery {
-    padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
-  }
-  .rg-arrow {
-    width: 40px;
-    height: 52px;
+    padding: 0 8px calc(10px + env(safe-area-inset-bottom, 0px));
   }
   .room-tip {
-    /* 默认 bottom:24px 会压在陈列条上（同 z-index，陈列条在后面所以盖住它）。
-       陈列条里多了一条横排时间线（93px），整体从 ~280px 长到 352px，
-       提示气泡要抬到整块的上沿之外才不会压在时间线或卡片标题上。 */
-    bottom: calc(364px + env(safe-area-inset-bottom, 0px));
+    /* 默认 bottom:24px 会压在时间线上（同 z-index，时间线在后面所以盖住它）。
+       手机上时间线约 96px 高，气泡抬到它上沿之外。 */
+    bottom: calc(112px + env(safe-area-inset-bottom, 0px));
     font-size: 13px;
     padding: 7px 14px;
   }
