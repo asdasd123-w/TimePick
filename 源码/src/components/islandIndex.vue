@@ -63,21 +63,37 @@
       ››
     </button>
 
+    <!-- 小岛时间线（右侧竖排）：最早建的一座在最上，按创建先后往下串。
+         点一下先聚焦（云海滑到它、岛身亮起来），再点同一项才进房间 ——
+         时间线很长时，单纯想浏览的人不该被一次误点带进别的房间。 -->
+    <MemTimeline
+      v-if="islands.length > 1"
+      class="isle-timeline"
+      label="小岛时间线"
+      :nodes="isleNodes"
+      :active-id="focusId"
+      hint="再点一次进入这座岛"
+      @pick="pickIsle"
+      @hover="onNodeHover"
+    />
+
     <!-- 云海: 整块横向平移, 拖拽/翻页都只改这一个 transform(合成层动画, 不重排) -->
     <div
       class="isle-field"
-      :class="{ dragging: dragMoved }"
+      :class="{ dragging: dragMoved, 'has-focus': focusId != null }"
       :style="{ transform: `translateX(calc(${pan} * -26vw))` }"
       @pointerdown="onFieldDown"
       @pointermove="onFieldMove"
       @pointerup="onFieldUp"
       @pointercancel="onFieldUp"
       @pointerleave="onFieldUp"
+      @click="onFieldClick"
     >
       <div
         v-for="p in placed"
         :key="p.isle.id"
         class="isle-slot"
+        :class="{ focused: focusId === isleKey(p.isle) }"
         :style="{
           left: p.slot.x + '%',
           top: p.slot.y + '%',
@@ -297,6 +313,7 @@ import { useRouter } from 'vue-router'
 import { useMemoriesStore } from '@/stores/memories'
 import { cloudApi } from '@/api/cloud'
 import IdleThought from './idleThought.vue'
+import MemTimeline from './memTimeline.vue'
 import { islandSpriteStyle, ISLAND_ARTS } from '@/data/islands'
 
 // 背景图原始宽高比(islandindex.webp = 1454x941), 供 bg-anchor 复刻 cover 渲染框
@@ -420,6 +437,62 @@ function enterIsle(isle) {
   if (!spaceId) return
   router.push({ name: 'room3d', params: { spaceId } })
 }
+
+// ---- 小岛时间线（右侧）----
+// 一座岛 = 一个记忆空间，服务端按创建时间倒序给；时间线要「最早的在最上」，
+// 所以这里翻过来排。日期用本地时区格式化 —— 不能走 toISOString，
+// 那是 UTC，国内早上 8 点前建的岛会显示成前一天。
+function isleKey(s) {
+  return s?.space_id || s?.id || null
+}
+function fmtDay(ts) {
+  const ms = Number(ts)
+  if (!ms) return ''
+  const d = new Date(ms)
+  if (Number.isNaN(d.getTime())) return ''
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())}`
+}
+const focusId = ref(null)
+const isleNodes = computed(() =>
+  [...islands.value]
+    .sort((a, b) => (a.created_at || 0) - (b.created_at || 0) || (isleKey(a) || 0) - (isleKey(b) || 0))
+    .map((s) => ({
+      id: isleKey(s),
+      title: s.island_name || s.space_name || '记忆空间',
+      date: fmtDay(s.created_at),
+    }))
+)
+// 点节点：第一次只聚焦，第二次（点同一项）才进岛。
+// 聚焦时把云海滑到这座岛所在的档位：档位公式与 placed 里的 u 保持一致
+// （0 号居中，之后 1 右 / 2 左 / 3 右外 / 4 左外 …），所以 pan 直接设成 u 就等于把它挪到屏幕中间。
+function pickIsle(id) {
+  const idx = islands.value.findIndex((s) => isleKey(s) === id)
+  if (idx < 0) return
+  if (focusId.value === id) {
+    enterIsle(islands.value[idx])
+    return
+  }
+  focusId.value = id
+  const u = idx === 0 ? 0 : Math.ceil(idx / 2) * (idx % 2 === 1 ? -1 : 1)
+  pan.value = Math.min(maxPan.value, Math.max(minPan.value, u))
+}
+// 悬停节点 = 悬停对应的岛：复用 hoverId，岛身发光 + 悬停气泡一起触发
+function onNodeHover(id) {
+  hoverId.value = id || null
+}
+// 点云海空白处取消聚焦（只认落在容器本身上的点击，
+// 岛身/齿轮/电视这些子元素的点击不参与，避免点菜单时把选中状态清掉）
+function onFieldClick(e) {
+  if (dragMoved.value) return
+  if (e.target !== e.currentTarget) return
+  focusId.value = null
+}
+// 搜索把某座岛过滤掉时，聚焦状态要跟着清掉，否则时间线上会留着一个不存在的选中项
+watch(islands, (list) => {
+  if (focusId.value == null) return
+  if (!list.some((s) => isleKey(s) === focusId.value)) focusId.value = null
+})
 
 // ---- 小电视: 用户上传的视频 ----
 const tvIsle = ref(null)
@@ -773,7 +846,8 @@ const CAT_THOUGHTS = [
   width: min(27vw, 34vmin);
   transform: translate(-50%, -50%) scale(var(--isle-scale, 1));
   /* 大小/高度随滑动到中心平滑放大缩小 */
-  transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1), top 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1), top 0.45s cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 0.28s ease;
 }
 /* 手机竖屏: 岛太小看不清, 放大到接近半屏宽 */
 @media (max-width: 760px) {
@@ -1296,6 +1370,68 @@ const CAT_THOUGHTS = [
   color: #4a3320;
 }
 
+/* ---------- 小岛时间线（右侧竖排） ----------
+   right 留 70px：右边竖着的 ‹‹ ›› 翻页按钮占 18~60px，时间线让开它，
+   两者只在横向上错开，纵向就不用互相躲了。
+   高度上限 52vh：再高会顶到右上角的搜索框。 */
+.isle-timeline {
+  position: absolute;
+  right: 70px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 26;
+  max-height: 52vh;
+}
+.isle-timeline :deep(.mtl-scroll) {
+  max-height: calc(52vh - 46px);
+}
+
+/* 时间线聚焦的那座岛：底座亮一圈暖光 + 岛身描边发光 + 木牌描边，
+   三层一起上才看得出"是被时间线选中的那一座"（只靠 drop-shadow 在浅色云海上几乎看不见）。 */
+/* 选中某座岛时，其余几座退到 .66：白光在奶油色云海上本来就不显眼，
+   靠"其余的暗下去"来做对比，比一味加亮更有效，也不会把画面烧白。 */
+.isle-field.has-focus .isle-slot:not(.focused) {
+  opacity: 0.66;
+}
+.isle-slot.focused::before {
+  content: '';
+  position: absolute;
+  inset: -6% -8% 4% -8%;
+  border-radius: 50%;
+  /* 用白光而不是暖色光：这页的背景本身就是暖奶油色，
+     暖色高亮压上去跟背景同色，等于没做。白光才会"亮出来"。 */
+  background: radial-gradient(
+    closest-side,
+    rgba(255, 255, 255, 0.62) 0%,
+    rgba(255, 242, 208, 0.24) 52%,
+    rgba(255, 242, 208, 0) 74%
+  );
+  z-index: -1;
+  pointer-events: none;
+  animation: isle-focus-pulse 2.6s ease-in-out infinite;
+}
+@keyframes isle-focus-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+}
+.isle-slot.focused .isle-art {
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 28px rgba(255, 255, 255, 0.72))
+    drop-shadow(0 18px 26px rgba(90, 80, 110, 0.34));
+  /* 1.14 而不是 1.08：悬停本来就有 1.07 的放大，
+     选中和悬停拉不开差距的话，用户分不清"鼠标扫过"和"被时间线选中"。 */
+  transform: scale(1.14) translateY(-10px);
+}
+.isle-slot.focused .isle-name {
+  box-shadow: 0 6px 18px rgba(60, 40, 20, 0.34), 0 0 0 2px rgba(255, 224, 176, 0.92);
+}
+
 /* ============================================================================
    手机版式（≤767.98）
    ★ 桌面是「可左右拖拽的云海 + 按 26vw 档位绝对定位的岛」：竖屏 390px 里，
@@ -1310,6 +1446,12 @@ const CAT_THOUGHTS = [
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
+  }
+
+  /* 手机版本身就是一个从上往下的竖列表，右侧再挂一条竖向时间线等于同一件事做两遍，
+     还把本来就窄的屏再切掉 100 多像素 —— 直接收掉。 */
+  .isle-timeline {
+    display: none;
   }
 
   /* 背景改成固定层：列表滚动时云海不动，否则往下滑就是一片空白 */

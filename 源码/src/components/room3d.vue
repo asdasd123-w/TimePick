@@ -146,6 +146,20 @@
       </div>
     </div>
 
+    <!-- 记忆时间线（右侧竖排）：这座岛上的记忆，按「事情发生的那天」从早到晚串一条。
+         点一条 = 弹出这条记忆的详情，同时把底部「房间物品」滑到那张卡片并高亮
+         （和点 3D 家具、点卡片走的是同一条 openItem 路径，不会出现两套详情）。
+         位置让开右上角的操作提示卡和底部的陈列条，只在中间那段竖直空间里滚。 -->
+    <MemTimeline
+      v-if="built && !booting && !layoutError && memNodes.length"
+      class="room-timeline"
+      kind="room"
+      label="记忆时间线"
+      :nodes="memNodes"
+      :active-id="pickedId"
+      @pick="jumpToItem"
+    />
+
     <!-- 点 3D 家具后，iframe 通过 postMessage 通知此处弹出该记忆的详情浮层 -->
     <transition name="fade">
       <div v-if="detail" class="detail-mask" @click.self="closeDetail">
@@ -346,6 +360,7 @@ import { useCloudAuthStore } from '@/stores/cloudAuth'
 import { useCompanionStore, PET_SHEETS, petRows, sheetRatio } from '@/stores/companion'
 import { call } from '@/api/cloud'
 import AiCompanion from './aiCompanion.vue'
+import MemTimeline from './memTimeline.vue'
 // 加载页背景（原来是一层径向渐变，按需求换成 background.png）：大屏用 1600w、小屏用 900w
 import ROOM_LOADING_BG from '@/assets/opt/roomLoading.webp'
 import ROOM_LOADING_BG_SM from '@/assets/opt/roomLoading-sm.webp'
@@ -745,6 +760,44 @@ const pickedId = ref(null)
 function openItem(it) {
   pickedId.value = it.item_id
   detail.value = it
+}
+
+// ---- 记忆时间线（右侧）----
+// 这座岛上的记忆按「事情发生的那天」从早到晚串成一条。
+// 没填日期的排在后面（按录入先后），不让空值把时间轴从中间打断 ——
+// 早先的日记里日期是可选的，硬按空值排序会让整条轴看起来"乱跳"。
+const memNodes = computed(() => {
+  const list = [...listItems.value]
+  list.sort((a, b) => {
+    const ka = a.entry_date || ''
+    const kb = b.entry_date || ''
+    if (ka && kb) return ka === kb ? a.item_id - b.item_id : ka < kb ? -1 : 1
+    if (ka) return -1
+    if (kb) return 1
+    return a.item_id - b.item_id
+  })
+  return list.map((it) => ({
+    id: it.item_id,
+    title: it.title || '（无标题）',
+    date: it.entry_date ? String(it.entry_date).replace(/-/g, '.') : '未填日期',
+  }))
+})
+
+// 点时间线上的某一条：先弹详情，再把「房间物品」横条滑到那张卡片并居中。
+// 只弹详情不挪横条的话，卡片还躺在屏幕外，用户回头找不到"刚点的是哪一条"。
+function jumpToItem(id) {
+  const it = propMap.value[id]
+  if (!it) return
+  openItem(it)
+  nextTick(() => centerCardOnStrip(id))
+}
+function centerCardOnStrip(id) {
+  const el = stripRef.value
+  if (!el) return
+  const idx = listItems.value.findIndex((x) => x.item_id === id)
+  const card = el.children[idx]
+  if (!card) return
+  el.scrollTo({ left: card.offsetLeft - (el.clientWidth - card.offsetWidth) / 2, behavior: 'smooth' })
 }
 
 // ---- 3D 小猫的互动层（菜单 / 气泡 / 找找内容）----
@@ -2630,6 +2683,36 @@ onUnmounted(() => {
 .room-hint.fade-leave-active {
   animation: none;
 }
+
+/* ---------- 记忆时间线（右侧） ----------
+   竖直空间是量出来的，不是估的（1440×900 实测）：
+     操作提示卡 78~214px、房间物品陈列条 647px 起（253px 高）。
+   所以时间线只能吃 232~631 之间那一段：上留 18px 缝、下留 16px 缝，
+   两个数字任一改动都要回来重算，否则就是压住提示卡或者盖住陈列条右箭头。 */
+.room-timeline {
+  position: absolute;
+  right: 14px;
+  top: 232px;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 232px - 269px);
+}
+/* 外层已经用 max-height 卡了整条卡片（含标题和提示行），内层就别再自己设上限，
+   两个上限叠在一起会让"能滚多少"变得难算。 */
+.room-timeline :deep(.mtl-scroll) {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+/* 矮屏（笔记本横放 / 分屏）：提示卡和陈列条都变矮，时间线跟着重算上下边界 */
+@media (max-height: 640px) {
+  .room-timeline {
+    top: 158px;
+    max-height: calc(100vh - 158px - 200px);
+  }
+}
 /* ============ 手机端（≤767.98px）覆盖 UI ============
    只动这一层 HTML 覆盖物，Cocos 侧一行没改（触摸手势本来就有，见 CameraRig 的 TOUCH_MOVE）。
    要解决的问题（390×844 实测）：
@@ -2728,6 +2811,14 @@ onUnmounted(() => {
     top: calc(56px + env(safe-area-inset-top, 0px));
     width: auto;
     height: 62%;
+  }
+
+  /* 记忆时间线：手机上从 214px 起（躲开 164~204 的提示折叠手柄），
+     底部让开 593px 起的陈列条 + 安全区，中间那段才归它 */
+  .room-timeline {
+    right: 8px;
+    top: calc(214px + env(safe-area-inset-top, 0px));
+    max-height: calc(100vh - 214px - 268px - env(safe-area-inset-bottom, 0px));
   }
 }
 </style>
