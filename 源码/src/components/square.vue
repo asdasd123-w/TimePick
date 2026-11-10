@@ -1596,6 +1596,16 @@ const filtered = computed(() => {
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #d3d9e2 transparent;
+  /* ★ 主内容区背景（2026-11-10 用户给图）：原来是纯 #f5f6f8 的平面底，
+     白卡片像浮在一张灰纸上。换成这张横向场景图，铺满「横幅以下」的整块内容区。
+     ★ 直接写在本元素上，不另开一层 div：滚动容器自己的背景默认**不跟内容滚**
+       （background-attachment: scroll 是相对元素边框盒，不是相对文档），
+       滚动时图原地不动、卡片从上面滑过去，就是想要的"贴着一张画"的效果；
+       也没用 fixed —— iOS Safari 对 fixed 背景支持不好，会缩放错位。
+     ★ center top + cover：原图 1672×663（2.52:1），桌面这块约 1440×630，
+       按高铺满后左右各裁 70 来像素，夕阳、山峦、石阶、栅栏都还在画面里。
+     ★ 底下一层 #f5f6f8 兜底：图还没加载完时不至于闪白。 */
+  background: url('../assets/opt/backgroundbody.webp') center top / cover no-repeat, #f5f6f8;
 }
 
 .sq-body::-webkit-scrollbar {
