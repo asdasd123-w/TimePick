@@ -61,6 +61,9 @@ export const cloudApi = {
   // 绑定 / 换绑手机号（微信扫码拿不到手机号时用这个补）
   bindPhone: (p) => call('auth/bind-phone', p),
   getSettings: () => call('settings/get'),
+  // 新用户引导: step 0=没开始 … 6=走完; force=true 才允许回退(「请教我」重放用)
+  getGuide: () => call('guide/get'),
+  setGuide: (step, force = false) => call('guide/set', { step, force }),
   updateSettings: (p) => call('settings/update', p),
   // 分享
   listShares: () => call('share/list'),

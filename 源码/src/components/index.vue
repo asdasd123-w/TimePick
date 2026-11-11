@@ -241,6 +241,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useCompanionStore } from '@/stores/companion'
 import { useCloudAuthStore } from '@/stores/cloudAuth'
 import { useSpacePrefsStore } from '@/stores/spacePrefs'
+import { useGuideStore } from '@/stores/guide'
 import { cloudApi } from '@/api/cloud'
 import { avatarOf } from '@/data/avatar'
 import AiCompanion from './aiCompanion.vue'
@@ -251,6 +252,7 @@ const emit = defineEmits(['back'])
 const companion = useCompanionStore()
 const auth = useCloudAuthStore()
 const spacePrefs = useSpacePrefsStore()
+const guide = useGuideStore()
 
 // 登录态/账号变化时拉取空间偏好并全局生效(动效/氛围/背景音乐/环境音)
 // 顺带兜底: 只有 token 而没有 user(刷新页面后还没拉过资料)时补一次, 否则左下角昵称是空的
@@ -268,6 +270,37 @@ const isAdmin = computed(() => !!(auth.user && auth.user.role))
 
 const router = useRouter()
 const route = useRoute()
+
+// ---- 新用户引导的入口 ----
+// ① 登录后拉一次进度；② 还没开始（step 0）或停在「写一篇日记」那一步（step 1）时，
+//    把用户直接送到记忆库 —— 引导第一步的控件就在那儿，落在别处等于没讲。
+//    ★ 只在"本次会话第一次进站"跳一次（sessionStorage 记一笔）：
+//      否则用户切到广场、切回记忆空间都会被拉走，像被劫持一样。
+// ③ 退出登录清干净本地进度，换个人登录不会带着上一个人的步骤。
+const GUIDE_LANDED_KEY = 'tp:guide-landed'
+
+watch(
+  () => auth.isLogin,
+  async (login) => {
+    if (!login) {
+      guide.reset()
+      return
+    }
+    const s = await guide.load()
+    if (s > 1) return
+    if (s === 0) await guide.advance(1)
+    let landed = ''
+    try {
+      landed = sessionStorage.getItem(GUIDE_LANDED_KEY) || ''
+    } catch {}
+    if (landed) return
+    try {
+      sessionStorage.setItem(GUIDE_LANDED_KEY, '1')
+    } catch {}
+    if (route.name !== 'memory') router.replace({ name: 'memory' })
+  },
+  { immediate: true },
+)
 
 // 当前子路由名, 用于左侧导航高亮
 const activeName = computed(() => router.currentRoute.value.name)
@@ -291,6 +324,9 @@ function toggleNav() {
 
 // 切换右侧子路由页面
 function go(name) {
+  // 引导第 2 步讲的就是"去我的记忆空间"：真点了，就进入第 3 步
+  // （岛屿页自己也会推进一次，两边都是幂等的，谁先到都行）
+  if (name === 'space' && guide.step > 0 && guide.step < 3) guide.advance(3)
   router.push({ name })
 }
 

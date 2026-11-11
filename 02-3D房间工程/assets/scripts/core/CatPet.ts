@@ -126,6 +126,8 @@ const WALK_CLIP = /walk/i
 // ---- 台词：与 2D 猫保持一致的人设，换 3D 之后说话的仍是同一只猫 ----
 // （摸摸头/打招呼/望望天/要抱抱这四组台词随菜单项一起删掉了）
 const CHAT_LINE = '小橘醒啦, 一起聊天喵~'
+/** 新用户引导：宿主发 beckon 时说的话（给第一次进房间的人看的） */
+const BECKON_LINE = '点我一下呀～ 我能带你转转这个房间'
 /** 找找内容：走到目的地后说的话（物品就在眼前 / 摆在高处时够不着） */
 const FIND_ARRIVE_LINES = ['找到了喵! 就是这个~', '在这儿呢, 喵~', '嗅嗅…找到了!']
 /** 物品摆在桌子/柜子上，猫只能走到旁边 */
@@ -655,6 +657,13 @@ export class CatPet extends Component {
         this.faceCamera()
         this.hop(0.08)
         this.say(CHAT_LINE)
+        break
+      case 'beckon':
+        // 新用户引导第 4 步：进房间后主动招手说「点我一下」。
+        // 6 秒够读完（宿主侧气泡会跟着猫走，不会飘走）。
+        this.faceCamera()
+        this.hop(0.08)
+        this.say(BECKON_LINE, 'say', 6000)
         break
       case 'stop':
         // 取消动作：停下来、清掉气泡（宿主收不到气泡就自己淡出）

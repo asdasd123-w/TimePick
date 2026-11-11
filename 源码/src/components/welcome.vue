@@ -738,12 +738,33 @@ const DOTS = Array.from({ length: 12 }, (_, id) => {
 @media (max-width: 767.98px), (max-width: 1024px) and (orientation: portrait) {
   .wk-title {
     left: calc(7vw - var(--cover-x, 0px));
-    top: calc(150px + env(safe-area-inset-top, 0px) - var(--cover-y, 0px));
-    /* 标题自己一套比例尺：图片宽度 ≈ 62vw（390 上是 204px），不再跟 cover 的 --u 走 */
-    --u: calc(min(100vw, 520px) / 620);
+    /* ★ 186 而不是 132：顶部那条「拾光云同步已开启」提示卡（.cloud-notice）占着
+       y≈110~175，标题压到 132 时手写「拾光」会被它盖掉一半（390×844 实测）。
+       下移到 186，两者的间距刚好；没有云提示条时标题也只是略低一点，不空。 */
+    top: calc(186px + env(safe-area-inset-top, 0px) - var(--cover-y, 0px));
+    /* 标题自己一套比例尺：图片宽度 ≈ 57vw（390 上是 187px），不再跟 cover 的 --u 走。
+       680 比原来的 620 再小一圈 —— 竖屏里 204px 的字会顶到右边，和云同步提示条挤在一起。 */
+    --u: calc(min(100vw, 520px) / 680);
   }
   .wk-card {
     display: none;
+  }
+  /* 副标题：竖屏底下是亮天空，原来的 0.88 白 + 一层浅阴影几乎看不清，
+     这里加深阴影并把字号提一档，字仍然小但能读。 */
+  .wk-slogan {
+    font-size: calc(var(--u) * 38);
+    letter-spacing: calc(var(--u) * 6);
+    text-shadow:
+      0 1px 3px rgba(70, 45, 15, 0.5),
+      0 2px 12px rgba(70, 45, 15, 0.3);
+  }
+  .wk-sub {
+    font-size: calc(var(--u) * 27);
+    letter-spacing: calc(var(--u) * 4);
+    color: rgba(255, 255, 255, 0.96);
+    text-shadow:
+      0 1px 3px rgba(70, 45, 15, 0.55),
+      0 2px 10px rgba(70, 45, 15, 0.32);
   }
   /* 「退出」只有 50×27，手指点容易点空；外层扩一圈热区，视觉大小不变 */
   .wk-auth-out {
@@ -761,12 +782,19 @@ const DOTS = Array.from({ length: 12 }, (_, id) => {
     top: calc(4.5% + env(safe-area-inset-top, 0px));
     right: 4%;
   }
-  /* 「开始探索」是按 --u 撑出来的胶囊，手机上顺手把热区标高一点 */
+  /* 「开始探索」：改成贴底定位（原来按 88.5% 算，视口一矮就偏、还会压到键盘那块），
+     尺寸也从「按图缩放」改成固定 46px 高 —— 竖屏里它只要够好点、不抢戏。 */
   .wk-enter {
-    min-height: 48px;
+    top: auto;
+    bottom: calc(54px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
     justify-content: center;
+    height: 46px;
+    padding: 0 34px;
+    font-size: 15px;
+    letter-spacing: 4px;
   }
 }
 </style>

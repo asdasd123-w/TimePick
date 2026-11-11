@@ -76,7 +76,12 @@
           <canvas ref="dinoCanvas" class="rl-canvas" width="600" height="150"></canvas>
           <p class="rl-game-tip">
             <span v-if="dinoState.dead">撞到啦 · 点一下重来</span>
-            <span v-else>空格 / 点一下 起跳 · 已跑 {{ dinoState.score }} 分</span>
+            <!-- 两套文案：键盘党看「空格」，触摸屏只看「点一下」（没有键盘，写空格是噪音）。
+                 用 CSS 二选一，判定条件同时接受「窄屏」和「触摸设备」两种。 -->
+            <template v-else>
+              <span class="rl-tip-desktop">空格 / 点一下 起跳 · 已跑 {{ dinoState.score }} 分</span>
+              <span class="rl-tip-touch">点一下 起跳 · 已跑 {{ dinoState.score }} 分</span>
+            </template>
           </p>
         </div>
 
@@ -285,7 +290,7 @@
               <span class="rh-tip">键盘要先点一下房间才有反应</span>
             </span>
             <span class="rh-touch">
-              <b>单指拖动</b> 转视角 · <b>双击地板</b> 让小猫走过去<br />
+              <b>单指拖动</b> 转视角 · <b>点两下地板</b> 让小猫走过去<br />
               <b>点小猫</b> 打开互动菜单 · <b>点上方按钮</b> 换机位
             </span>
           </span>
@@ -314,6 +319,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { useRoute, useRouter } from 'vue-router'
 import { useCloudAuthStore } from '@/stores/cloudAuth'
 import { useCompanionStore, PET_SHEETS, petRows, sheetRatio } from '@/stores/companion'
+import { useGuideStore } from '@/stores/guide'
 import { call } from '@/api/cloud'
 import AiCompanion from './aiCompanion.vue'
 import MemTimeline from './memTimeline.vue'
@@ -325,6 +331,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useCloudAuthStore()
 const companion = useCompanionStore()
+const guide = useGuideStore()
 
 // 3D 产物位置：同源默认 /room3d（Cocos 构建后复制到 TimePick/public/room3d）；
 // 跨域独立部署时由 .env 的 VITE_ROOM3D_URL 指定
@@ -550,6 +557,8 @@ function markReady() {
   finishTimer = setTimeout(() => {
     loading.value = false
     showHint()
+    // 新用户引导第 4 步：房间能看见了，再让猫开口 —— 加载层还盖着的时候说话是白说。
+    runRoomGuide()
   }, 450)
 }
 
@@ -755,6 +764,25 @@ function postCat(msg) {
   frame.value?.contentWindow?.postMessage(msg, '*')
 }
 
+/**
+ * 3D 房间里的新用户引导（第 4 步：点小猫）。
+ *
+ * 提示由 3D 那只猫自己说 —— 宿主拿不到它在屏幕上的位置（Cocos 只在点它/它说话时
+ * 才发一次锚点坐标），在外面画一个气泡注定对不准。这里发 beckon 让它招手 + 说话，
+ * 气泡自然长在它头顶。
+ *
+ * 只在"前面几步走过了但还没进过房间"时讲；
+ * step 0（压根没开始引导，比如老账号直接点开房间链接）不打扰。
+ */
+async function runRoomGuide() {
+  await guide.load()
+  const s = guide.step
+  if (s <= 0 || s >= 5) return
+  if (s < 4) await guide.advance(4)
+  // 猫可能刚就位、动画还没播完，缓一拍再让它招手
+  setTimeout(() => postCat({ type: 'tp:catAction', action: 'beckon' }), 900)
+}
+
 function catAction(act) {
   catMenu.value = null
   clearTimeout(catMenuTimer)
@@ -924,6 +952,8 @@ function onMessage(e) {
       setTimeout(() => (tipText.value = ''), 2200)
     }
   } else if (msg.type === 'tp:catMenu') {
+    // 引导第 4 步讲的正是"点我一下"：真点了，推进到"退出后跟 2D 小猫打招呼"
+    if (guide.step === 4) guide.advance(5)
     // 3D 里点了小猫：菜单摆到它头上（归一化坐标，直接换成百分比，
     // 因为 iframe 占满整个 room3d 容器，比例坐标天然对得上）
     const nx = Number(msg.nx)
@@ -1399,7 +1429,10 @@ onMounted(async () => {
     loadLayout()
   }
 })
+// 从 3D 退出来：不管点没点过猫，第 4 步都算过去了 ——
+// 回到 2D 页面后由那只小猫讲"以后点我选请教我"（第 5 步）。
 onUnmounted(() => {
+  if (guide.step === 4) guide.advance(5)
   window.removeEventListener('message', onMessage)
   window.removeEventListener('keydown', onDinoKey)
   clearInterval(clockTimer)
@@ -1543,6 +1576,11 @@ onUnmounted(() => {
   text-align: center;
   letter-spacing: 0.5px;
   color: #b3a08d;
+}
+/* 跑酷提示的两套文案：桌面「空格 / 点一下」，触摸屏只有「点一下」。
+   判定条件在文件末尾的手机断点与「触摸设备」媒体查询里，两处都会反转这一对。 */
+.rl-tip-touch {
+  display: none;
 }
 /* 左上角竖列容器：返回 + 视角导航 + 操作提示，三者按流水排列。
    ★ 用容器而不是各自绝对定位：导航在窄屏会换成两排，提示卡跟着往下让，
@@ -2414,6 +2452,25 @@ onUnmounted(() => {
   margin: 0;
   z-index: 1;
 }
+/* ============ 触摸设备（不分宽度）============
+   ★ 3D 页的两套文案原来是靠「宽度 ≤767.98」切换的，手机横屏（844×390）宽度超了，
+     就会落回桌面断点显示 WASD / 右键那套 —— 触屏上一条也用不了。
+     这里按「没有 hover、主指针是粗的」再兜一道，平板、横屏手机都算触摸设备。 */
+@media (hover: none) and (pointer: coarse) {
+  .rh-desktop {
+    display: none;
+  }
+  .rh-touch {
+    display: block;
+  }
+  .rl-tip-desktop {
+    display: none;
+  }
+  .rl-tip-touch {
+    display: inline;
+  }
+}
+
 /* ============ 手机端（≤767.98px）覆盖 UI ============
    只动这一层 HTML 覆盖物，Cocos 侧一行没改（触摸手势本来就有，见 CameraRig 的 TOUCH_MOVE）。
    要解决的问题（390×844 实测）：
@@ -2431,41 +2488,43 @@ onUnmounted(() => {
   }
   /* 按钮列：返回单独一行，视角导航另起一行（并排会折成 3 行，把画面吃掉） */
   .left-col {
-    top: calc(68px + env(safe-area-inset-top, 0px));
+    top: calc(60px + env(safe-area-inset-top, 0px));
     left: 10px;
-    gap: 6px;
+    gap: 5px;
     max-width: calc(100% - 20px);
   }
   .top-actions {
     flex-direction: column;
     align-items: flex-start;
-    gap: 6px;
+    gap: 5px;
   }
+  /* 按钮从 40 收到 34（胶囊本身够长，点得到），把画面让出来 */
   .back-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 40px;
-    padding: 0 16px;
-    font-size: 14px;
+    height: 34px;
+    padding: 0 13px;
+    font-size: 13px;
   }
   .view-nav {
     flex-wrap: nowrap;
-    gap: 5px;
+    gap: 4px;
   }
   .vn-btn {
-    height: 40px;
-    padding: 0 12px;
-    font-size: 13px;
-    letter-spacing: 0.4px;
+    height: 34px;
+    padding: 0 10px;
+    font-size: 12.5px;
+    letter-spacing: 0.3px;
   }
   /* 20px 的图标 + 2 字标签在 40px 胶囊里会溢出，手机上图标是纯装饰，去掉 */
   .vn-btn .vn-ico {
     display: none;
   }
-  /* 提示卡：按钮列 = 40 + 6 + 40 = 86，从 68 起算到 154，再留 10px 间隙 */
+  /* 提示卡：按钮列 = 34 + 5 + 34 = 73，从 60 起算到 133，再留 11px 间隙
+     ★ 改了上面两个按钮的高度就要同步改这个数字，否则展开的提示卡会压住视角按钮 */
   .hint-wrap {
-    top: calc(164px + env(safe-area-inset-top, 0px));
+    top: calc(144px + env(safe-area-inset-top, 0px));
     right: 10px;
     max-width: calc(100% - 20px);
   }
@@ -2481,15 +2540,21 @@ onUnmounted(() => {
   .rh-touch {
     display: block;
   }
-  /* 折叠手柄：18×46 只有 18px 宽，手指点不中；手机给 40×40 */
+  .rl-tip-desktop {
+    display: none;
+  }
+  .rl-tip-touch {
+    display: inline;
+  }
+  /* 折叠手柄：18×46 只有 18px 宽，手指点不中；手机给 34×34 */
   .hint-toggle {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
   }
   .ht-chev {
-    width: 12px;
-    height: 20px;
+    width: 11px;
+    height: 18px;
   }
   /* 底部条：让出刘海屏/手势条的安全区 */
   .room-gallery {

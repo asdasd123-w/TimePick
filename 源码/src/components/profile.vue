@@ -2168,7 +2168,7 @@ onMounted(() => { loadData() })
     height: auto;
     max-height: none;
     aspect-ratio: auto;
-    padding: 124px 12px calc(20px + env(safe-area-inset-bottom));
+    padding: 104px 10px calc(20px + env(safe-area-inset-bottom));
   }
 
   .profile-bg {
@@ -2177,7 +2177,7 @@ onMounted(() => { loadData() })
     right: 0;
     top: 0;
     width: 100%;
-    height: 124px;
+    height: 104px;
     object-fit: cover;
     object-position: 50% 100%;
     -webkit-mask-image: linear-gradient(180deg, #000 56%, transparent 100%);
@@ -2194,7 +2194,7 @@ onMounted(() => { loadData() })
     flex-direction: column;
     justify-content: center;
     gap: 4px;
-    height: 124px;
+    height: 104px;
     padding: 0 16px;
     background: linear-gradient(
       90deg,
@@ -2208,7 +2208,7 @@ onMounted(() => { loadData() })
 
   .pf-m-head h1 {
     margin: 0;
-    font-size: 26px;
+    font-size: 22px;
     font-weight: 700;
     letter-spacing: 3px;
     color: #57402f;
@@ -2217,7 +2217,7 @@ onMounted(() => { loadData() })
 
   .pf-m-head p {
     margin: 0;
-    font-size: 12.5px;
+    font-size: 11.5px;
     color: #967f6a;
   }
 
@@ -2271,8 +2271,38 @@ onMounted(() => { loadData() })
 
   .pet-tile {
     width: auto;
-    min-height: 92px;
-    padding: 10px 4px;
+    min-height: 76px;
+    padding: 8px 4px;
+  }
+
+  /* ★ 「空间偏好 / 其他设置」桌面是左右各半的书页，竖屏两列各只剩 ~170px：
+     行标签被压成竖排（实测「背景音乐」四个字竖着写）、下拉框挤到下一行。
+     手机上改成上下两张通栏卡，卡内不再自己滚（整页滚）。 */
+  .two-cards {
+    grid-template-columns: 1fr;
+    flex: none;
+    gap: 10px;
+  }
+
+  .two-cards > .card {
+    overflow: visible;
+  }
+
+  .card-title {
+    font-size: 13.5px;
+  }
+
+  .card-sub {
+    font-size: 11px;
+  }
+
+  .row-label {
+    font-size: 12.5px;
+  }
+
+  .link-row {
+    min-height: 34px;
+    font-size: 13px;
   }
 
   /* 开关 / 下拉：热区 44px */
@@ -2284,12 +2314,12 @@ onMounted(() => { loadData() })
   }
 
   .mini-select {
-    min-height: 40px;
-    font-size: 14px;
+    min-height: 34px;
+    font-size: 13px;
   }
 
   .foot-input {
-    min-height: 42px;
+    min-height: 38px;
     font-size: 16px;
   }
 

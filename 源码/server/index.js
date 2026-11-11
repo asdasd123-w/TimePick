@@ -1046,6 +1046,29 @@ function actStatus(row, t) {
   if (row.start_time && row.start_time > t) return 0
   return 1
 }
+// 新用户引导的上线时间（2026-11-11 13:00 GMT+8 → UTC 05:00）。
+// 早于这个时间注册的账号算"老用户"：不自动引导，但随时能点小猫的「请教我」重看。
+// ★ 光靠 user_settings 里有没有这行判断不了 —— 很多老账号压根没有设置行，
+//   第一次调 guide/get 时才会插一条，那时默认 0 就变成了"被当成新用户"。
+const GUIDE_LAUNCH_AT = 1794373200000
+
+// user_settings 是按需创建的(老用户第一次调设置接口时才有这行)。
+// 引导进度也存在这张表里, 所以这里统一兜一层"没有就建"。
+function ensureUserSettings(uid) {
+  let s = db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(uid)
+  if (!s) {
+    // 注册时间早于引导上线 = 老用户，直接给 6（已完成）；新账号从 0 开始
+    const u = db.prepare('SELECT created_at FROM user WHERE id = ?').get(uid)
+    const initStep = Number(u?.created_at) >= GUIDE_LAUNCH_AT ? 0 : 6
+    db.prepare(
+      `INSERT INTO user_settings (user_id, default_vis, ai_read_memory, ai_cross_space, ai_summary, ai_no_training, bgm, ambient, ambient_type, motion, tone, guide_step, created_at, updated_at)
+       VALUES (?, 'self', 1, 1, 1, 1, 1, 1, '雨声', '适中', '暖色', ?, ?, ?)`
+    ).run(uid, initStep, now(), now())
+    s = db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(uid)
+  }
+  return s
+}
+
 const handlers = {
   'system/health': (_p, uid) => ({
     service: 'timepick-api',
@@ -1693,18 +1716,32 @@ const handlers = {
       .map((r) => ({ ...r, media: mediaOf(r.id) })) // 单人公开记忆，量小，逐条查即可
   },
 
-  // ---------- 用户设置 ----------
-  'settings/get': (_p, uid) => {
-    let s = db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(uid)
-    if (!s) {
-      db.prepare(
-        `INSERT INTO user_settings (user_id, default_vis, ai_read_memory, ai_cross_space, ai_summary, ai_no_training, bgm, ambient, ambient_type, motion, tone, created_at, updated_at)
-         VALUES (?, 'self', 1, 1, 1, 1, 1, 1, '雨声', '适中', '暖色', ?, ?)`
-      ).run(uid, now(), now())
-      s = db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(uid)
-    }
-    return s
+  // ---------- 新用户引导 ----------
+  // 只回进度本身: 前端拿它决定"这次要不要自动讲"和"讲到第几步"。
+  'guide/get': (_p, uid) => {
+    const s = ensureUserSettings(uid)
+    return { step: Number(s.guide_step) || 0 }
   },
+  // 写进度。默认只准往前走(避免重复/并发请求把进度打回去),
+  // 传 force=true 才允许回退 —— 只有「请教我」重放会这么用。
+  'guide/set': (p, uid) => {
+    const v = Number(p.step)
+    if (!Number.isInteger(v) || v < 0 || v > 6) throw err('引导进度不合法')
+    const s = ensureUserSettings(uid)
+    const cur = Number(s.guide_step) || 0
+    const next = p.force === true ? v : Math.max(cur, v)
+    if (next !== cur) {
+      db.prepare('UPDATE user_settings SET guide_step = ?, updated_at = ? WHERE user_id = ?').run(
+        next,
+        now(),
+        uid
+      )
+    }
+    return { step: next }
+  },
+
+  // ---------- 用户设置 ----------
+  'settings/get': (_p, uid) => ensureUserSettings(uid),
   'settings/update': (p, uid) => {
     const fields = ['default_vis', 'ai_read_memory', 'ai_cross_space', 'ai_summary', 'ai_no_training', 'bgm', 'ambient', 'ambient_type', 'motion', 'tone', 'bgm_track']
     const sets = []

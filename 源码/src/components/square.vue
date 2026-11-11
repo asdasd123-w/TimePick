@@ -3481,22 +3481,22 @@ button.p-avatar:hover {
     color: #8d7a6b;
   }
 
-  /* 搜索条：44px 高，右侧一个「写日记」直达记忆库 */
+  /* 搜索条：38px 高，右侧一个「写日记」直达记忆库 */
   .sq-m-bar {
     display: flex;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   .sq-m-search {
     flex: 1;
     min-width: 0;
-    height: 44px;
-    padding: 0 14px;
+    height: 38px;
+    padding: 0 12px;
     border: 1px solid #e6e9ee;
     border-radius: 999px;
     background: #fff;
-    font-size: 16px; /* iOS 聚焦不放大 */
+    font-size: 16px; /* ★ 必须 16px：iOS 聚焦不放大 */
     color: #5c5350;
     outline: none;
   }
@@ -3507,13 +3507,13 @@ button.p-avatar:hover {
 
   .sq-m-write {
     flex: none;
-    height: 44px;
-    padding: 0 14px;
+    height: 38px;
+    padding: 0 12px;
     border: none;
     border-radius: 999px;
     background: linear-gradient(135deg, #ffcf9b, #ff9db1);
     color: #7a4a3a;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     white-space: nowrap;
   }
@@ -3544,43 +3544,203 @@ button.p-avatar:hover {
 
   .sq-tabs button {
     flex: none;
-    min-height: 38px;
-    padding: 0 16px;
-    font-size: 14px;
+    min-height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
   }
 
   /* 卡片：取消 380px 定高（竖屏一屏只放得下一张半，短卡片还留一大块空白） */
   .post {
     height: auto;
     min-height: 0;
-    contain-intrinsic-size: auto 280px;
+    gap: 4px;
+    padding: 6px;
+    border-radius: 10px;
+    contain-intrinsic-size: auto 160px;
   }
 
+  /* ★ 一行三条（2026-11-11 用户要求）：390 宽减去内容区 12×2 与两条 6px 间隙，
+     每张约 116px。卡片里所有元素都按这个宽度重定了尺寸，改列数要连下面一起看。 */
   .sq-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
   }
 
-  /* 卡片里那些 23~27px 的小按钮 → 40px 左右 */
+  /* 空态/加载更多要跨满整行，否则会被挤进第一格里 */
+  .sq-empty,
+  .sq-loadmore,
+  .sq-loadmore-end {
+    grid-column: 1 / -1;
+  }
+
+  .post-head {
+    gap: 4px;
+  }
+
   .p-avatar {
-    width: 40px;
-    height: 40px;
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
   }
 
+  .post-meta b {
+    font-size: 10.5px;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .post-meta span {
+    font-size: 8.5px;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* 「⋯」菜单是三列里唯一的操作入口，热区不能太小但也别占掉半个头像位 */
   .p-more {
-    width: 40px;
-    height: 40px;
+    width: 22px;
+    height: 22px;
+    font-size: 14px;
   }
 
-  .p-expand,
-  .p-tag,
-  .p-like {
-    min-height: 38px;
-    padding: 0 10px;
+  .post-text {
+    font-size: 10px;
+    line-height: 1.45;
+    -webkit-line-clamp: 3;
   }
 
+  /* 三列里「详情 →」和正文挤不下，入口统一收到卡片右下角的箭头（见 .p-enter） */
+  .p-expand {
+    display: none;
+  }
+
+  .p-photo,
+  .p-img {
+    min-height: 44px;
+    border-radius: 6px;
+  }
+
+  .p-thumbs {
+    gap: 3px;
+  }
+
+  .p-tags {
+    gap: 3px;
+  }
+
+  .p-tag {
+    min-height: 0;
+    padding: 1px 5px;
+    font-size: 9px;
+  }
+
+  .post-foot {
+    gap: 6px;
+  }
+
+  .p-like,
+  .p-comment {
+    min-height: 0;
+    padding: 0;
+    font-size: 9.5px;
+  }
+
+  /* 「进入这段记忆 →」在 116px 里放不下，只留箭头（文字用 font-size:0 藏掉，
+     不删 DOM，桌面端照旧） */
   .p-enter {
+    min-height: 0;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .p-enter::after {
+    content: '→';
+    font-size: 13px;
+    color: #5b87c0;
+  }
+
+  /* 音频卡：三列放不下播放条 + 时长，只留一个 ▶ / ⏸ */
+  .p-audio {
+    min-height: 26px;
+    padding: 0 4px;
+  }
+
+  .p-audio .pa-name,
+  .p-audio .pa-bar,
+  .p-audio .pa-time {
+    display: none;
+  }
+
+  /* ---- 活动 / 公告：竖屏保持一行一条（缩字号和内边距，不并排） ---- */
+  .sq-major-events,
+  .sq-activities,
+  .sq-notices {
+    margin-top: 12px;
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+
+  .major-event-card {
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+
+  .major-event-header b {
+    font-size: 13.5px;
+  }
+
+  .major-event-desc {
+    font-size: 11.5px;
+  }
+
+  .major-event-time,
+  .major-event-num {
+    font-size: 10.5px;
+  }
+
+  .major-event-bar {
+    height: 5px;
+  }
+
+  .major-event-card > button,
+  .act-ended-tag {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .act-item {
+    padding: 10px 12px;
+  }
+
+  .act-title {
+    font-size: 13.5px;
+  }
+
+  .act-desc {
+    font-size: 11.5px;
+  }
+
+  .act-time,
+  .act-meta {
+    font-size: 10.5px;
+  }
+
+  .notice-head {
+    padding: 8px 12px;
+    font-size: 12.5px;
+  }
+
+  .notice-bar-main {
     min-height: 36px;
+    font-size: 12.5px;
+  }
+
+  .notice-body {
+    font-size: 12px;
   }
 
   /* 右栏（可能认识的人 / 热门标签）：整宽排在信息流后面 */

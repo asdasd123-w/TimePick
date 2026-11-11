@@ -167,6 +167,23 @@ if (!usCols.includes('bgm_track')) {
   db.exec("ALTER TABLE user_settings ADD COLUMN bgm_track TEXT NOT NULL DEFAULT ''")
 }
 
+// 旧库补列 user_settings.guide_step(新用户引导进度)
+//   0 = 没开始(注册后第一次进站)  1 = 已提示写日记  2 = 日记写好, 已提示去记忆空间
+//   3 = 已到记忆空间, 已提示岛已生成  4 = 已进 3D, 已提示点小猫  5 = 已退出 3D, 已提示点 2D 小猫
+//   6 = 走完
+// ★ 存服务端而不是 localStorage: 换个浏览器/清一下缓存不该重新被引导一遍;
+//   而且「请教我」重放时也要把进度真正写回去, 否则刷新又会跳回上一次的位置。
+if (!usCols.includes('guide_step')) {
+  db.exec('ALTER TABLE user_settings ADD COLUMN guide_step INTEGER NOT NULL DEFAULT 0')
+  // ★ 把"引导上线之前就在用"的老用户直接标成已完成（想再看可以点小猫的「请教我」）。
+  //   判据用注册时间，而不是"加列这一刻表里有没有这行"：上线前几小时刚注册的真新用户
+  //   这时候也已经产生了设置行，一刀切置 6 会把他永久豁免掉。
+  //   时间戳必须与 server/index.js 的 GUIDE_LAUNCH_AT 一致（2026-11-11 13:00 GMT+8）。
+  db.exec(
+    'UPDATE user_settings SET guide_step = 6 WHERE user_id IN (SELECT id FROM user WHERE created_at < 1794373200000)',
+  )
+}
+
 // 用户上传的背景音乐(预置四首打包在前端 public/music, 这里只存自传的)
 db.exec(`CREATE TABLE IF NOT EXISTS bgm_track (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

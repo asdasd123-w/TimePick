@@ -23,7 +23,9 @@
 //                                                          near = true 表示只走到旁边（东西摆在桌上/柜子里）
 //               { type:'tp:closeDetail' }                  关闭详情浮层（预留）
 // 说明：本地同源 iframe 用 '*' 即可；若跨域部署，请改为校验具体 origin。
-export type CatAction = 'chat' | 'find' | 'stop'
+// beckon = 新用户引导里的「点我一下」：招手 + 说一句，等用户真的点它。
+// （宿主要自己画气泡的话拿不到猫的屏幕坐标，只能让猫自己说）
+export type CatAction = 'chat' | 'find' | 'stop' | 'beckon'
 
 export type HostMessage =
   | { type: 'tp:ready' }

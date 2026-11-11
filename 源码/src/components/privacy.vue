@@ -1060,7 +1060,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize))
     height: auto;
     max-height: none;
     aspect-ratio: auto;
-    padding: 124px 12px calc(20px + env(safe-area-inset-bottom));
+    padding: 104px 10px calc(20px + env(safe-area-inset-bottom));
   }
 
   /* 装饰条：只取插画底部一条（避开烤进去的标题），底边渐隐接入页面底色 */
@@ -1070,7 +1070,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize))
     right: 0;
     top: 0;
     width: 100%;
-    height: 124px;
+    height: 104px;
     object-fit: cover;
     object-position: 50% 100%;
     -webkit-mask-image: linear-gradient(180deg, #000 56%, transparent 100%);
@@ -1086,9 +1086,9 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize))
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 4px;
-    height: 124px;
-    padding: 0 16px;
+    gap: 3px;
+    height: 104px;
+    padding: 0 14px;
     background: linear-gradient(
       90deg,
       rgba(253, 247, 239, 0.97) 0%,
@@ -1101,7 +1101,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 
   .pv-m-head h1 {
     margin: 0;
-    font-size: 26px;
+    font-size: 22px;
     font-weight: 700;
     letter-spacing: 3px;
     color: #57402f;
@@ -1110,7 +1110,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 
   .pv-m-head p {
     margin: 0;
-    font-size: 12.5px;
+    font-size: 11.5px;
     color: #967f6a;
   }
 
@@ -1119,11 +1119,20 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize))
     position: static;
     width: auto;
     height: auto;
-    padding: 14px;
-    border-radius: 16px;
+    padding: 12px;
+    border-radius: 14px;
     background: rgba(255, 253, 250, 0.96);
     box-shadow: 0 6px 18px rgba(120, 90, 60, 0.1);
     overflow: visible;
+  }
+
+  .card-head b {
+    font-size: 14.5px;
+  }
+
+  .card-desc {
+    font-size: 11.5px;
+    line-height: 1.45;
   }
 
   .card-body {
@@ -1132,20 +1141,49 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 
   /* 可见性两选一：竖排，热区 48px 高 */
   .vis-box {
-    gap: 8px;
+    gap: 6px;
   }
 
   .vis-row {
-    min-height: 48px;
-    padding: 10px 12px;
+    min-height: 44px;
+    padding: 8px 10px;
   }
 
-  /* 开关：原来是 38×20，手指点不准位置；这里只把热区撑到 44×44，视觉尺寸不变 */
-  .sw {
-    flex: none;
-    margin: -12px;
-    padding: 12px;
-    box-sizing: content-box;
+  .vis-label {
+    font-size: 12.5px;
+  }
+
+  .vis-text b {
+    font-size: 13px;
+  }
+
+  .vis-text span {
+    font-size: 11px;
+  }
+
+  /* 开关：视觉缩到 34×19（原来 38×20 在竖屏里显得很抢眼），
+     热区用一层透明 ::before 往外扩，不影响布局（inset 负值不占位）。 */
+  .ai-row .sw {
+    position: relative;
+    width: 34px;
+    height: 19px;
+  }
+
+  .ai-row .sw::before {
+    content: '';
+    position: absolute;
+    inset: -12px -10px;
+  }
+
+  .ai-row .sw::after {
+    top: 2px;
+    left: 2px;
+    width: 15px;
+    height: 15px;
+  }
+
+  .ai-row .sw.on::after {
+    left: 17px;
   }
 
   /* 桌面卡片里的字是居中的（为了对准烘焙的白卡），竖屏通栏后居中很难读 */
@@ -1167,8 +1205,16 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize))
   }
 
   .ai-row {
-    min-height: 48px;
-    gap: 10px;
+    min-height: 44px;
+    gap: 8px;
+  }
+
+  .ai-text b {
+    font-size: 13px;
+  }
+
+  .ai-text span {
+    font-size: 10.5px;
   }
 
   /* ai-text 不设 min-width:0 的话，长文案会顶到开关下面（实测「允许 AI 读取我的记忆」
@@ -1180,12 +1226,14 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 
   /* 分享管理里的操作按钮 */
   .sh-act {
-    min-height: 34px;
-    padding: 0 10px;
+    min-height: 30px;
+    padding: 0 9px;
+    font-size: 11.5px;
   }
 
   .sh-tab {
-    min-height: 38px;
+    min-height: 32px;
+    font-size: 13px;
   }
 
   .dm-row,

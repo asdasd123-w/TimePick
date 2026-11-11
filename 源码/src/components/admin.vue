@@ -2442,8 +2442,8 @@ onMounted(() => {
     width: auto;
     height: auto;
     min-width: 0;
-    margin: 10px;
-    padding: 14px;
+    margin: 8px;
+    padding: 10px;
     border-radius: 14px;
     overflow: visible;
   }
@@ -2451,6 +2451,15 @@ onMounted(() => {
   .admin-head {
     flex-wrap: wrap;
     gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .admin-head b {
+    font-size: 16.5px;
+  }
+
+  .admin-head span {
+    font-size: 11.5px;
   }
 
   /* Tab 横向可滑，不再溢出屏幕 */
@@ -2460,7 +2469,9 @@ onMounted(() => {
     min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
-    gap: 8px;
+    gap: 6px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
   }
 
   .admin-tabs::-webkit-scrollbar {
@@ -2469,15 +2480,74 @@ onMounted(() => {
 
   .admin-tab {
     flex: none;
-    min-height: 40px;
-    padding: 0 14px;
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  /* 每条反馈/举报/活动：卡内边距和字号整体收一档，一屏多看一条 */
+  .panel-list {
+    gap: 8px;
+  }
+
+  .panel-item {
+    padding: 9px 10px;
+    border-radius: 10px;
+  }
+
+  .item-head {
+    gap: 6px;
+  }
+
+  .item-status,
+  .item-type,
+  .item-user,
+  .item-contact,
+  .item-date {
+    font-size: 10.5px;
+  }
+
+  .item-content {
+    font-size: 12.5px;
+  }
+
+  .item-reply,
+  .item-user-reply {
+    font-size: 11.5px;
   }
 
   /* 面板里的操作按钮与下拉 */
   .panel-select,
   .item-btn,
-  .admin-act {
-    min-height: 38px;
+  .admin-act,
+  .item-select,
+  .item-input {
+    min-height: 32px;
+    font-size: 12.5px;
+  }
+
+  .item-actions {
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+
+  /* ★ 桌面输入框是 min-width:120px，竖屏 334 宽的卡片里「状态下拉 + 回复框 + 发送 + 删除」
+     一行放不下，删除键被挤到第二行单独站一排。这里把输入框的最小宽度放开，
+     四个控件挤回一行（输入框吃掉剩下的宽度）。 */
+  .item-input {
+    flex: 1 1 80px;
+    min-width: 0;
+    padding: 4px 8px;
+  }
+
+  .item-select {
+    flex: none;
+    padding: 4px 6px;
+  }
+
+  .item-btn {
+    flex: none;
+    padding: 0 8px;
   }
 
   /* 表格/长列表允许横向滑动，不要横向撑破页面 */

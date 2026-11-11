@@ -311,6 +311,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMemoriesStore } from '@/stores/memories'
+import { useGuideStore } from '@/stores/guide'
 import { cloudApi } from '@/api/cloud'
 import IdleThought from './idleThought.vue'
 import MemTimeline from './memTimeline.vue'
@@ -321,9 +322,14 @@ const BG_RATIO = (1454 / 941).toFixed(5)
 
 const router = useRouter()
 const store = useMemoriesStore()
+const guide = useGuideStore()
 
-onMounted(() => {
+onMounted(async () => {
   store.loadIslands().catch(() => {})
+  // 新用户引导：人已经站在记忆空间了，说明「去我的记忆空间」这一步做到了。
+  // 从左侧导航点过来的话 index.vue 已经推进过一次，这里是兜底（后端只前进，不会打架）。
+  await guide.load()
+  if (guide.step === 2) guide.advance(3)
 })
 
 // 飞鸟数据已随装饰层一起删除。
@@ -1489,7 +1495,7 @@ const CAT_THOUGHTS = [
     bottom: 0;
   }
 
-  /* 搜索：整宽 44px，贴顶 */
+  /* 搜索：整宽、38px（比首版的 44px 收一档，一屏能多露半座岛） */
   .isle-search {
     /* relative 而不是 static：z-index 只对定位元素生效，
        否则会被下面 z-index:20 的 .isle-field 盖住（搜索框"消失"就是这么来的） */
@@ -1501,21 +1507,22 @@ const CAT_THOUGHTS = [
     left: auto;
     right: auto;
     top: auto;
-    margin: 12px 12px 0;
+    margin: 10px 10px 0;
   }
 
   .isle-search-input {
     width: 100%;
-    height: 44px;
-    font-size: 16px; /* iOS 聚焦不放大 */
+    height: 38px;
+    /* ★ 必须 16px：iOS 上小于 16px 的输入框聚焦时会被自动放大整页 */
+    font-size: 16px;
   }
 
   .isle-search-clear {
     position: absolute;
-    right: 7px;
+    right: 6px;
     top: 50%;
-    width: 30px;
-    height: 30px;
+    width: 26px;
+    height: 26px;
     margin: 0;
     transform: translateY(-50%);
   }
@@ -1525,17 +1532,24 @@ const CAT_THOUGHTS = [
     display: none;
   }
 
+  /* ★ 一行两座岛（2026-11-11 用户要求）：
+     原来是 flex 竖排、一座岛 62vw，一屏只能看两座半，翻列表要滑半天。
+     改成 2 列 grid，岛宽交给列宽（≈ (390-56-16-6)/2 ≈ 156px），
+     所有装饰（雪碧图裁切、木牌、齿轮、电视/收音机）都是按 .isle-slot 宽度等比缩放的，
+     这里只改容器，不用动绝对定位。 */
   .isle-field {
     position: static;
     /* 内联样式给了 translateX(pan)，列表模式必须按掉 */
     transform: none !important;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 30px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-items: center;
+    align-items: start;
+    /* 行距 26px：木牌挂在岛下方 -9%，得留出它的高度，否则下行岛会压住上行木牌 */
+    gap: 26px 6px;
     width: auto;
     height: auto;
-    padding: 16px 12px calc(30px + env(safe-area-inset-bottom));
+    padding: 14px 8px calc(28px + env(safe-area-inset-bottom));
     will-change: auto;
     cursor: default;
     touch-action: pan-y;
@@ -1543,7 +1557,8 @@ const CAT_THOUGHTS = [
 
   .isle-slot {
     position: static !important;
-    width: min(62vw, 250px) !important;
+    width: 100% !important;
+    max-width: 178px;
     transform: none !important;
     transition: none;
   }
@@ -1553,33 +1568,39 @@ const CAT_THOUGHTS = [
     animation: none;
   }
 
-  /* 触摸设备没有 hover，齿轮要一直可见，尺寸抬到 40×40 */
+  /* 触摸设备没有 hover，齿轮要一直可见。2 列网格里岛只有 ~156px 宽，
+     40px 的齿轮会压掉四分之一座岛，收到 30px 并贴回岛内。 */
   .isle-gear {
     opacity: 1;
-    width: 40px;
-    height: 40px;
-    right: -8px;
-    top: 2px;
+    width: 30px;
+    height: 30px;
+    right: -2px;
+    top: -2px;
   }
 
   .isle-gear svg {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
   }
 
   .isle-menu {
-    min-width: 150px;
+    min-width: 132px;
   }
 
   .isle-menu-item {
-    min-height: 42px;
-    font-size: 14.5px;
+    min-height: 38px;
+    font-size: 13.5px;
   }
 
-  /* 木牌：竖列表里岛宽只有 250px，字号收一点免得挤成两行 */
+  /* 木牌：岛宽只剩 ~156px，17px 的字必然两行撑破，收到 11.5px + 紧凑内边距 */
   .isle-name {
-    padding: 4px 12px;
-    font-size: 14px;
+    max-width: 100%;
+    gap: 4px;
+    padding: 3px 9px;
+    font-size: 11.5px;
+    border-width: 1.5px;
+    border-radius: 8px;
+    box-shadow: 0 3px 8px rgba(60, 40, 20, 0.26);
   }
 
   /* 弹窗（编辑悬停内容 / 更换小岛 / 分享 / 删除确认）统一底部抽屉 */

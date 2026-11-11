@@ -2,6 +2,13 @@
   <div class="feedback">
     <div class="feedback-figure" :style="{ '--fb-bg': `url(${PAGE_BG})` }">
       <div class="feedback-figure-inner">
+        <!-- 手机端标题（≤767 才显示）：海报上的「问题反馈」是烤进图片里的，
+             竖屏把海报裁成顶部装饰条之后标题会跟着被裁掉，用文字重画一份。 -->
+        <header class="fb-m-head">
+          <h1>问题反馈</h1>
+          <p>每一条建议，我们都会认真读完</p>
+        </header>
+
         <img
     class="feedback-bg"
     src="../assets/opt/feedbackBackground.webp"
@@ -291,6 +298,11 @@ onMounted(() => { loadHistory() })
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #d8c4b4 transparent;
+}
+
+/* 手机端标题条：桌面由海报图里的字负责，这里恒隐藏、不占位 */
+.fb-m-head {
+  display: none;
 }
 
 .fb-zone::-webkit-scrollbar {
@@ -650,5 +662,184 @@ onMounted(() => { loadHistory() })
 
 .fb-confirm-btn.confirm:hover {
   background: #e0705a;
+}
+
+/* ============================================================================
+   手机竖屏（≤767.98px）
+   ★ 桌面是「一张 1308×1024 的海报 + 两张按百分比绝对定位的白卡」：
+     竖屏宽度只有 390，contain 之后整张海报缩到 390×305，
+     白卡里的字号还是桌面的 14~16px，于是每行只剩三四个字 ——
+     实测「写下你的想法」被压成竖排、「我的反馈 共 6 条」叠在一起。
+   ★ 这里照「隐私设置」那一页的做法整套换掉：海报退成 104px 顶部装饰条，
+     两张卡回到文档流竖排（先表单、后记录），卡内不再内部滚动，整页滚。
+   ============================================================================ */
+@media (max-width: 767.98px), (max-width: 1024px) and (orientation: portrait) {
+  .feedback {
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    background: #fdf7ef;
+  }
+
+  .feedback-figure {
+    position: relative;
+    display: block;
+    height: auto;
+    /* ★ 必须撤掉 size containment：它让内部内容不参与外部高度计算，
+       改成 height:auto 的流式布局后会直接塌成 0 高（整页空白） */
+    container-type: normal;
+    background: none;
+  }
+
+  /* 桌面为了补 contain 留白垫的那层模糊底图，手机上不需要 */
+  .feedback-figure::before {
+    display: none;
+  }
+
+  .feedback-figure-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    height: auto;
+    aspect-ratio: auto;
+    max-width: none;
+    max-height: none;
+    padding: 104px 10px calc(20px + env(safe-area-inset-bottom));
+  }
+
+  /* 装饰条：只取插画底部那条木桌一段，底边渐隐接到页面米色底 */
+  .feedback-bg {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    width: 100%;
+    height: 104px;
+    object-fit: cover;
+    object-position: 50% 100%;
+    -webkit-mask-image: linear-gradient(180deg, #000 54%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 54%, transparent 100%);
+  }
+
+  .fb-m-head {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    height: 104px;
+    padding: 0 14px;
+    background: linear-gradient(
+      90deg,
+      rgba(253, 247, 239, 0.97) 0%,
+      rgba(253, 247, 239, 0.88) 46%,
+      rgba(253, 247, 239, 0.12) 82%,
+      rgba(253, 247, 239, 0) 100%
+    );
+    pointer-events: none;
+  }
+
+  .fb-m-head h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: #57402f;
+    font-family: 'Songti SC', 'STSong', 'SimSun', serif;
+  }
+
+  .fb-m-head p {
+    margin: 0;
+    font-size: 11.5px;
+    color: #967f6a;
+  }
+
+  /* 两张卡回到流里：白底圆角，和隐私设置页一个模子 */
+  .fb-zone {
+    position: static;
+    width: auto;
+    height: auto;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 14px;
+    background: rgba(255, 253, 250, 0.96);
+    box-shadow: 0 6px 18px rgba(120, 90, 60, 0.1);
+    overflow: visible;
+  }
+
+  .fb-head b {
+    font-size: 14.5px;
+  }
+
+  .fb-head span {
+    font-size: 11.5px;
+  }
+
+  .fb-type {
+    min-height: 30px;
+    padding: 4px 11px;
+    font-size: 12px;
+  }
+
+  /* ★ 输入框一律 16px：iOS 上小于 16px 聚焦时会把整页放大，看起来像"页面崩了" */
+  .fb-text {
+    flex: none;
+    min-height: 104px;
+    padding: 8px 10px;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .fb-contact,
+  .fb-reply-input {
+    min-height: 38px;
+    font-size: 16px;
+  }
+
+  .fb-submit {
+    min-height: 36px;
+    padding: 0 18px;
+    font-size: 14px;
+  }
+
+  .fb-ok {
+    font-size: 12px;
+  }
+
+  .fb-rows {
+    gap: 8px;
+  }
+
+  .fb-row {
+    padding: 8px 10px;
+    gap: 4px;
+  }
+
+  .fb-row-text {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .fb-reply {
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+
+  .fb-reply-btn {
+    min-height: 34px;
+    padding: 0 12px;
+  }
+
+  /* 确认弹窗：竖屏别顶满，给两侧留白 */
+  .fb-confirm {
+    width: calc(100% - 48px);
+    max-width: 340px;
+  }
 }
 </style>

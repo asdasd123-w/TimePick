@@ -4,6 +4,16 @@
   <div ref="rootEl" class="pet-root" :class="{ flip }" @pointerdown.stop="onDown">
     <!-- ★ 2026-10-27 用户要求「宠物的名字不显示」：头顶那个名字小胶囊不再渲染。
          名字仍然从 config.pet_name 读进 petName（别处还会用到），只是不画出来。 -->
+    <!-- 新用户引导气泡：比普通的 pet-say 大一号、带关闭按钮，而且不会自己消失
+         （普通气泡 2.4 秒就淡出，讲步骤根本来不及读）。
+         ★ 摆在小猫头顶，跟着猫一起走 —— 所以"走到按钮旁边再说"是一体的，
+           不需要另开一层定位去追元素。 -->
+    <div v-if="guideSay" class="pet-guide" :class="'align-' + guideAlign">
+      <p class="pet-guide-txt">{{ guideSay }}</p>
+      <button class="pet-guide-x" type="button" title="这次先不看了" @click.stop="dismissGuide">
+        ×
+      </button>
+    </div>
     <div v-if="say" class="pet-say">{{ say }}</div>
     <div v-if="thought" class="pet-thought">{{ thought }}</div>
     <div v-if="menu" class="pet-menu">
@@ -12,6 +22,8 @@
       <button type="button" @click.stop="doGaze">望望天</button>
       <button type="button" @click.stop="doHug">要抱抱</button>
       <button type="button" @click.stop="doChat">找小橘聊天</button>
+      <!-- 想再听一遍引导: 从「写第一篇日记」重头走一遍 -->
+      <button type="button" class="pet-menu-teach" @click.stop="doTeach">请教我</button>
       <button type="button" @click.stop="doStop">取消动作</button>
     </div>
     <!-- 点击粒子特效 -->
@@ -38,8 +50,8 @@
 
 <script setup>
 // 游走宠物: 全页常驻, 可拖拽; 自主随机游走+随机动作; 点击菜单可互动/联动 AI
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   useCompanionStore,
   petSheet,
@@ -50,11 +62,14 @@ import {
 import { cloudApi } from '@/api/cloud'
 import { useCloudAuthStore } from '@/stores/cloudAuth'
 import { useSpacePrefsStore } from '@/stores/spacePrefs'
+import { GUIDE_TEXT, useGuideStore } from '@/stores/guide'
 
 const companion = useCompanionStore()
 const spacePrefs = useSpacePrefsStore()
 const auth = useCloudAuthStore()
+const guide = useGuideStore()
 const route = useRoute()
+const router = useRouter()
 
 // 宠物名字
 const petName = ref('')
@@ -359,6 +374,12 @@ function advanceMove(dt) {
     moveTarget = null
     vel = 0
     play('idle')
+    // 引导走位：到了才开始说话（边走边说会跟着猫飘到一半再被截断）
+    if (arriveSay) {
+      const text = arriveSay
+      arriveSay = ''
+      sayGuide(text)
+    }
     return
   }
   const targetV = moveTarget.cruise * Math.min(1, Math.max(0.25, dist / 80))
@@ -596,6 +617,162 @@ function doStop() {
   thought.value = ''
 }
 
+// ---- 新用户引导 ----
+// 宠物是全站唯一的"讲解员"：每一步都是它走到对应控件旁边，再冒一句气泡。
+// 步骤和检测点写在 stores/guide.js 和各自页面里，这里只负责"怎么讲"。
+//
+// 每一步要走到哪：
+//   1 记忆库的「去写一篇日记」按钮    2 左侧导航的「我的记忆空间」
+//   3 第一座记忆岛                    5 原地（不走了，招手+气泡）
+//   4 是 3D 房间里那只猫的事，2D 这边不参与
+const GUIDE_TARGETS = {
+  1: '.add-btn',
+  2: '[title="我的记忆空间"]',
+  3: '.isle-slot',
+}
+// 第 1 步只在记忆库页讲；第 3 步只在记忆空间讲。
+// 别的页面上没有对应控件，讲了也没法照着做（不如不讲，等用户自己走过去）。
+const GUIDE_PAGES = {
+  1: 'memory',
+  3: 'space',
+}
+// 手机上不走的步骤：左侧导航收成了一列 56px 的图标，猫贴着它站会被顶到屏幕最上沿
+// （实测 y≈15，正好压住页面标题），不如站在原地说。宽屏照常走过去。
+const GUIDE_NO_WALK = {
+  2: () => window.innerWidth < 768,
+}
+
+const guideSay = ref('')
+// 气泡靠哪边对齐：小猫贴着屏幕左/右边缘时，居中的气泡会有一部分跑到屏幕外
+const guideAlign = ref('center')
+// 已经讲过第几步：防止同一页里因为重复 watch 反复弹
+let shownStep = 0
+// 走到位之后要说的那句话（走路期间先存着，到点才说）
+let arriveSay = ''
+let guideTimer = 0
+
+function sayGuide(text) {
+  clearTimeout(sayTimer)
+  clearTimeout(thoughtTimer)
+  say.value = ''
+  thought.value = ''
+  guideSay.value = text
+  // 第 5 步是"以后点我就能重放"：原地招招手，比干站着冒一句话更像个邀请
+  if (guide.activeStep() === 5) play('beckon')
+  // 气泡最宽 236px，中心离边缘不足半个宽就改成靠边对齐，否则会被屏幕切掉
+  const center = pos.x + BOX_W.value / 2
+  const half = 122
+  guideAlign.value =
+    center < half ? 'left' : center > window.innerWidth - half ? 'right' : 'center'
+  // 第 5 步讲完就算引导结束：用户已经被告知"以后怎么重放"，
+  // 再挂在那儿就是挡路了。留 12 秒是给足阅读时间（手机上字多）。
+  if (guide.activeStep() === 5) {
+    clearTimeout(guideTimer)
+    guideTimer = setTimeout(() => guide.done(5), 12000)
+  }
+}
+
+function dismissGuide() {
+  guideSay.value = ''
+  // 关掉 = 这次别念了，进度保留在服务端（下次登录还从这一步继续）
+  guide.mute()
+  clearTimeout(guideTimer)
+}
+
+// 走到某个元素旁边（不是"正上方"，正上方会把控件挡住）
+function walkToEl(selector) {
+  const el = document.querySelector(selector)
+  if (!el) return false
+  const r = el.getBoundingClientRect()
+  if (!r.width || !r.height) return false
+  // 元素在视口外（滚出去了/被折叠了）：走过去也是对着空气，直接原地讲
+  if (r.bottom < 0 || r.top > window.innerHeight) return false
+  const gap = 16
+  // 优先站右侧（不挡导航和按钮本身），右侧不够就换左侧，两边都不行就站下方
+  let x = r.right + gap
+  let y = r.top + r.height / 2 - BOX_H.value / 2
+  if (x + BOX_W.value > window.innerWidth - 8) x = r.left - BOX_W.value - gap
+  if (x < 8) {
+    x = Math.max(8, r.left)
+    y = r.bottom + 10
+  }
+  y = Math.min(Math.max(y, 8), Math.max(8, window.innerHeight - BOX_H.value - 8))
+  moveTarget = { x, y, cruise: CRUISE_NAV }
+  startMove()
+  return true
+}
+
+/**
+ * 讲当前这一步。幂等：同一步只讲一次（换页面会重新讲）。
+ * 触发点：挂载、登录、步骤变化、路由变化。
+ */
+async function runGuide() {
+  if (!auth.isLogin) return
+  const s = guide.activeStep()
+  // 换了一步就把上一步的气泡收掉 —— 否则人已经到新页面了，头顶还挂着上一条
+  if (shownStep && shownStep !== s) {
+    guideSay.value = ''
+    arriveSay = ''
+  }
+  if (!s || s === 4) {
+    // 4 在 3D 里讲（Cocos 那只猫），6 表示走完；都不该留着 2D 气泡
+    if (!s) {
+      guideSay.value = ''
+      arriveSay = ''
+      shownStep = 0
+    }
+    return
+  }
+  if (shownStep === s) return
+
+  // 步骤要求的页面不对：不冒泡，等用户自己走到那一页
+  const need = GUIDE_PAGES[s]
+  if (need && route.name !== need) return
+
+  // 路由刚切过来时目标元素可能还没渲染（子路由是异步组件），等一拍再找
+  await nextTick()
+  await new Promise((r) => setTimeout(r, 260))
+  if (guide.activeStep() !== s) return
+  if (shownStep === s) return
+
+  const sel = GUIDE_TARGETS[s]
+  const skipWalk = GUIDE_NO_WALK[s] && GUIDE_NO_WALK[s]()
+  if (sel && !skipWalk) {
+    if (walkToEl(sel)) {
+      arriveSay = GUIDE_TEXT[s]
+      shownStep = s
+    }
+    // 有目标但找不到/在视口外（比如记忆空间还没有岛）就先不讲：
+    // 这时候说"你的记忆岛已经生成啦"是在讲瞎话，等条件满足了再说
+    return
+  }
+  // 没有目标控件的步骤（第 5 步在 3D 退出来之后）、手机上不走的步骤：原地讲
+  sayGuide(GUIDE_TEXT[s])
+  shownStep = s
+}
+
+// 步骤 / 登录态 / 路由 任一变化都重算一次。
+// （未登录时组件就挂载了，那时 activeStep 是 0，登录后必须补讲）
+watch(
+  [() => guide.step, () => guide.loaded, () => route.name, () => auth.isLogin],
+  () => runGuide(),
+  { immediate: true },
+)
+
+// 「请教我」：从第一步重讲。先回记忆库页 —— 第一步的控件在那儿。
+async function doTeach() {
+  menu.value = false
+  moveTarget = null
+  guideSay.value = ''
+  shownStep = 0
+  clearTimeout(guideTimer)
+  play('beckon')
+  showSay('好呀，我从头带你走一遍～')
+  await guide.replay()
+  if (route.name !== 'memory') router.push({ name: 'memory' })
+  setTimeout(runGuide, 400)
+}
+
 // 转屏 / 改窗口宽度：重算盒子尺寸（位置会顺带夹回可视区）
 let resizeTimer = 0
 function onResize() {
@@ -624,10 +801,14 @@ function applyTransform() {
   if (f !== flip.value) flip.value = f
 }
 
-// 屏幕变窄时把盒子缩小：手机 88~132px，桌面维持 140
+// 屏幕变窄时把盒子缩小：手机 72~112px，桌面维持 140
+// ★ 2026-11-11：原来是 min(132, max(88, w*0.24))（390 上是 94px），
+//   在记忆库/广场那种一行三张的密排页里会盖住两整张卡片，收到 w*0.19（390 上是 74px）。
+//   位置/走位/气泡定位全部按 BOX_W、BOX_H 算，改这一个数字就够了；
+//   切尺寸后会走一遍 clampPos，不会把猫留在屏幕外。
 function syncBoxSize() {
   const w = window.innerWidth
-  const size = w < 768 ? Math.round(Math.min(132, Math.max(88, w * 0.24))) : 140
+  const size = w < 768 ? Math.round(Math.min(112, Math.max(72, w * 0.19))) : 140
   BOX_W.value = size
   BOX_H.value = Math.round(size * (178 / 140))
   el_size_apply()
@@ -643,8 +824,10 @@ function el_size_apply() {
 }
 
 function onDown(e) {
-  // 点在菜单里时不干预, 让按钮自己的 click 生效
-  downInMenu = Boolean(e.target.closest('.pet-menu'))
+  // 点在菜单/引导气泡里时不干预, 让按钮自己的 click 生效。
+  // ★ 气泡上的 × 也要算进来：不算的话 pointerup 会把它当成"点了小猫"，
+  //   于是关掉气泡的同时又弹出一份菜单。
+  downInMenu = Boolean(e.target.closest('.pet-menu, .pet-guide'))
   wasMenu = menu.value
   start = { x: e.clientX, y: e.clientY, px: pos.x, py: pos.y }
   moved = 0
@@ -689,6 +872,12 @@ function onUp() {
     // 点击: 点宠物本体开合菜单+特效想法; 点菜单内部交给按钮处理
     if (!downInMenu) {
       menu.value = !wasMenu
+      // 第 5 步就是"教你点我"：真点了，说明学到了，直接收掉引导
+      if (menu.value && guide.activeStep() === 5) {
+        guideSay.value = ''
+        clearTimeout(guideTimer)
+        guide.done(5)
+      }
       burst()
       boingKey.value += 1
       showThought(TAP_THOUGHTS[Math.floor(Math.random() * TAP_THOUGHTS.length)])
@@ -762,6 +951,7 @@ onMounted(() => {
 onUnmounted(() => {
   stopLoop()
   window.removeEventListener('resize', onResize)
+  clearTimeout(guideTimer)
   clearTimeout(sayTimer)
   clearTimeout(thoughtTimer)
   window.removeEventListener('pointermove', onMove)
@@ -951,6 +1141,84 @@ onUnmounted(() => {
 }
 
 /* 说话气泡 */
+/* 新用户引导气泡：比普通对话气泡宽一圈，右上角带 ×，不会自己消失。
+   靠边时用 align-left / align-right 改对齐，避免半个气泡跑到屏幕外。 */
+.pet-guide {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  width: max-content;
+  max-width: min(236px, calc(100vw - 24px));
+  padding: 9px 6px 9px 12px;
+  border: 1px solid #f0d6c0;
+  border-radius: 14px;
+  background: #fffdf9;
+  box-shadow: 0 10px 28px rgba(120, 80, 40, 0.24);
+  color: #6f5342;
+  font-size: 13px;
+  line-height: 1.62;
+  text-align: left;
+  z-index: 12;
+}
+.pet-guide.align-left {
+  left: 0;
+  transform: none;
+}
+.pet-guide.align-right {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+/* 指向小猫的小三角：气泡在头顶时朝下 */
+.pet-guide::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: #fffdf9;
+  border-right: 1px solid #f0d6c0;
+  border-bottom: 1px solid #f0d6c0;
+  transform: rotate(45deg);
+  border-radius: 0 0 3px 0;
+}
+.pet-guide.align-left::after {
+  left: 30px;
+}
+.pet-guide.align-right::after {
+  left: auto;
+  right: 24px;
+  margin-left: 0;
+}
+.pet-guide-txt {
+  margin: 0;
+  flex: 1 1 auto;
+}
+.pet-guide-x {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #bda694;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.pet-guide-x:hover {
+  background: #fbeee2;
+  color: #8a5f43;
+}
+
 .pet-say {
   position: absolute;
   bottom: 100%;
@@ -1002,11 +1270,33 @@ onUnmounted(() => {
 /* 宠物靠近顶部时, 菜单/气泡/想法翻到下方避免出屏 */
 .pet-root.flip .pet-say,
 .pet-root.flip .pet-menu,
-.pet-root.flip .pet-thought {
+.pet-root.flip .pet-thought,
+.pet-root.flip .pet-guide {
   bottom: auto;
   top: 100%;
   margin-bottom: 0;
   margin-top: 6px;
+}
+
+/* 翻到下方后，小三角要朝上（不然还指着天花板） */
+.pet-root.flip .pet-guide::after {
+  bottom: auto;
+  top: -6px;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 1px solid #f0d6c0;
+  border-top: 1px solid #f0d6c0;
+  border-radius: 3px 0 0 0;
+}
+
+/* 菜单里的「请教我」：和别的项区分开一点，它是"再看一遍引导"这种低频操作 */
+.pet-menu button.pet-menu-teach {
+  background: #fff3e2;
+  color: #b8762c;
+  font-weight: 600;
+}
+.pet-menu button.pet-menu-teach:hover {
+  background: #ffe7c9;
 }
 
 .pet-root.flip .pet-thought {

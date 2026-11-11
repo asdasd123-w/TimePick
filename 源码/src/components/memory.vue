@@ -172,7 +172,7 @@
                 "
                 @click="toggleShare(e)"
               >
-                {{ e.is_public ? '✓ 已分享' : '↗ 分享到广场' }}
+                {{ e.is_public ? '✓' : '↗' }}<span class="entry-share-t">{{ e.is_public ? '已分享' : '分享到广场' }}</span>
               </button>
               <div v-if="e.photo" class="entry-photo">
                 <img :src="e.photo" alt="" loading="lazy" decoding="async" />
@@ -764,6 +764,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMemoriesStore, TIME_OPTIONS } from '@/stores/memories'
 import { useCloudAuthStore } from '@/stores/cloudAuth'
+import { useGuideStore } from '@/stores/guide'
 import { cloudApi } from '@/api/cloud'
 import { useDebouncedRef, throttleSubmit } from '@/composables/useRateLimit'
 import { ISLAND_OPTIONS } from '@/data/islands'
@@ -774,6 +775,7 @@ import IdleThought from './idleThought.vue'
 
 const store = useMemoriesStore()
 const auth = useCloudAuthStore()
+const guide = useGuideStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -962,7 +964,10 @@ async function sendDm() {
 }
 
 // 记忆库数据来自服务器: 每个用户一份, 登录后加载; 浏览模式则拉取他人公开记忆
-onMounted(() => {
+onMounted(async () => {
+  // 引导进度先拿到再判断：本地 step 还是 0 的时候直接 advance(1)，
+  // 对一个早就走完引导的账号来说会读到错的步骤（后端是 max，但本地会被写成 1）。
+  await guide.load()
   loadFansCount()
   // 探测本用户可用的 AI 能力（总开关 × 用户级开关），供「保存后 AI 选项」使用
   loadAiPerm()
@@ -980,6 +985,11 @@ onMounted(() => {
     store
       .load(true)
       .then(() => {
+        // 新用户引导：停在「写一篇日记」这一步时，如果库里已经有记忆，
+        // 说明早就写过了（比如换了浏览器/清了缓存），不必再让人家从头来一遍。
+        // ★ 重放（「请教我」）时不要跳：用户就是想把"写第一篇日记"这段再听一遍，
+        //   库里已经有 20 条记忆也不能直接把他送到第 2 步。
+        if (guide.step === 1 && store.entries.length && !guide.replaying) guide.advance(2)
         if (wantCompose) openAdd()
         if (!wantEdit) return
         const hit = store.entries.find((e) => Number(e.id) === wantEdit)
@@ -1999,6 +2009,8 @@ async function save() {
     }
     showDialog.value = false
     tip('已添加记忆')
+    // 引导：日记真的写进去了，才把用户推进到"去我的记忆空间看看"这一步
+    if (guide.step === 1) guide.advance(2)
     // ★ 无论管理员开没开权限都要弹（需求），没权限的项在选择时提示
     if (saved) openAiAssist(saved)
   } catch (e) {
@@ -2503,6 +2515,12 @@ async function doRemove() {
 .entry-share:hover {
   background: #ffe9d6;
   color: #e0865a;
+}
+
+/* 文案单独包一层：手机上卡片只有 118px 宽，胶囊要退化成只有一个箭头的圆点，
+   桌面上补回原来那个空格（模板里把「↗ 分享到广场」拆成了图标 + 文字两段）。 */
+.entry-share-t {
+  margin-left: 3px;
 }
 
 .entry-share.on {
@@ -4195,7 +4213,7 @@ async function doRemove() {
     min-height: 100%;
   }
 
-  /* 解除容器查询的"等比缩放盒子"，改回普通流式容器 */
+  /* 标题条跟着收紧：128px 在竖屏上等于一整屏的 1/6，只用来放两个字太亏 */
   .memory-figure-inner {
     display: flex;
     flex-wrap: wrap;
@@ -4206,14 +4224,14 @@ async function doRemove() {
     max-height: none;
     aspect-ratio: auto;
     /* 顶部让出装饰条的位置（装饰条是绝对定位的） */
-    padding: 128px 12px calc(18px + env(safe-area-inset-bottom));
+    padding: 104px 6px calc(18px + env(safe-area-inset-bottom));
   }
 
   /* 装饰条：只取插画底部的书桌一段（书本/拍立得/手账），完全避开烤在图里的标题字。
      width 262% + object-position 左下 = 放大 2.6 倍后只看到左侧书桌，右侧超出部分被裁掉。 */
   .memory-bg {
     width: 262%;
-    height: 128px;
+    height: 104px;
     max-width: none;
     object-fit: cover;
     object-position: 0% 100%;
@@ -4230,7 +4248,7 @@ async function doRemove() {
     right: 0;
     top: 0;
     z-index: 2;
-    height: 128px;
+    height: 104px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -4248,57 +4266,58 @@ async function doRemove() {
 
   .mem-m-head h1 {
     margin: 0;
-    font-size: 27px;
+    font-size: 23px;
     font-weight: 700;
-    letter-spacing: 4px;
+    letter-spacing: 3px;
     color: #57402f;
     font-family: 'Songti SC', 'STSong', 'SimSun', serif;
   }
 
   .mem-m-head p {
     margin: 0;
-    font-size: 12.5px;
-    letter-spacing: 0.5px;
+    font-size: 11.5px;
+    letter-spacing: 0.4px;
     color: #967f6a;
   }
 
-  /* 搜索：整宽、44px 高（指尖标准热区），圆钮跟着放大 */
+  /* 搜索：整宽、38px 高（44px 在竖屏上白占一截，圆钮跟着缩） */
   .search-pill {
     position: static;
     flex: 1 1 100%;
     width: auto;
-    height: 44px;
-    padding: 0 8px 0 14px;
+    height: 38px;
+    padding: 0 6px 0 12px;
     background: rgba(255, 253, 250, 0.96);
     box-shadow: inset 0 0 0 1px #eaddcd;
     order: 1;
   }
 
   .search-input {
-    font-size: 16px; /* iOS 聚焦不放大 */
+    /* ★ 必须 16px：iOS 上小于 16px 的输入框聚焦时整页会被放大 */
+    font-size: 16px;
     height: 100%; /* 整条胶囊都能点进输入框, 不用瞄准中间那 20px */
   }
 
   .search-go {
-    width: 34px;
-    height: 34px;
+    width: 28px;
+    height: 28px;
   }
 
-  /* 四个筛选：回到流里，和搜索同一行自动换行，每个 38px 高 */
+  /* 四个筛选：回到流里，和搜索同一行自动换行，每个 32px 高 */
   .filter-wrap {
     position: relative;
     top: auto;
     left: auto;
     width: auto;
-    height: 38px;
+    height: 32px;
     order: 2;
   }
 
   .filter-btn {
-    height: 38px;
-    padding: 0 10px;
-    gap: 5px;
-    font-size: 13px;
+    height: 32px;
+    padding: 0 8px;
+    gap: 4px;
+    font-size: 12px;
   }
 
   /* 下拉菜单：贴住自己的按钮，宽度按内容走（原来的 100% 只有 80px 宽，选项被截） */
@@ -4328,7 +4347,7 @@ async function doRemove() {
     height: auto;
     min-height: 0;
     margin-top: 4px;
-    padding: 12px;
+    padding: 8px;
     order: 3;
   }
 
@@ -4337,41 +4356,99 @@ async function doRemove() {
   }
 
   .add-btn {
-    min-height: 40px;
-    padding: 0 12px;
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 12.5px;
   }
 
+  /* ★ 一行三张（2026-11-11 用户要求）：竖屏 390 宽、面板内边距 10，减去两处 6px 间隙，
+     每张约 116px。下面所有卡片内元素都按这个宽度重新定尺寸，改了列数一定要一起看。 */
   .entry-list {
     overflow: visible;
-    grid-template-columns: 1fr;
-    gap: 9px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
   }
 
   .entry-card {
-    padding: 12px;
+    gap: 3px;
+    padding: 6px;
+    border-radius: 10px;
   }
 
-  /* 卡片右上角「已分享」、详情、三个操作按钮：原来是 23/21px 高，手指点不准 */
+  .entry-photo {
+    height: 62px;
+    border-radius: 7px;
+  }
+
+  .entry-no-photo {
+    height: 62px;
+    border-radius: 7px;
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  .entry-title {
+    font-size: 12px;
+    line-height: 1.3;
+    /* 标题最长就是 AI 起的 4 个字，但仍然兜一层省略，别把卡片撑歪 */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* 卡片右上角「已分享」：116px 宽放不下五个字，退化成只有一个箭头/对勾的圆点 */
   .entry-share {
-    min-height: 38px;
-    padding: 0 10px;
-    top: 8px;
-    right: 8px;
+    top: 3px;
+    right: 3px;
+    min-height: 18px;
+    padding: 0 4px;
+    font-size: 10px;
+    letter-spacing: 0;
+    line-height: 18px;
+    box-shadow: 0 1px 4px rgba(207, 138, 83, 0.22);
+  }
+
+  .entry-share-t {
+    display: none;
+  }
+
+  .entry-meta {
+    font-size: 9.5px;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #ad9784;
+  }
+
+  .entry-sem {
+    padding: 0 5px;
+    font-size: 9px;
+  }
+
+  .entry-content {
+    -webkit-line-clamp: 2;
+    font-size: 10px;
+    line-height: 1.35;
   }
 
   .entry-detail-btn {
-    min-height: 36px;
-    padding: 0 10px;
+    min-height: 20px;
+    padding: 0;
+    font-size: 10px;
   }
 
   .entry-actions {
-    gap: 8px;
+    gap: 2px;
+    margin-top: 2px;
   }
 
   .entry-actions button {
     flex: 1 1 0;
-    min-height: 38px;
-    padding: 0 8px;
+    min-height: 24px;
+    padding: 0 1px;
+    font-size: 10px;
+    letter-spacing: 0;
   }
 
   /* 统计卡：从右侧浮层变成列表下面的一块横排 */

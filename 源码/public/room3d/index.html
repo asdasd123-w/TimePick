@@ -3,11 +3,6 @@
 <head>
   <meta charset="utf-8">
 
-  <!-- ★ 手动加的一行（重新构建 Cocos 后若被覆盖，重新加上即可）：
-       不写这行浏览器会去请求 /favicon.ico，这个页面所在目录里没有它，
-       控制台就常驻一条 404 —— 白噪声，但会被当成"部署出错"。 -->
-  <link rel="icon" href="/favicon.svg">
-
   <title>Cocos Creator | sg3d</title>
 
   <!--http://www.html5rocks.com/en/mobile/mobifying/-->
@@ -101,11 +96,6 @@
 <script>
     System.import('./index.js').catch(function(err) { console.error(err); })
 </script>
-<!-- ★ 只做进度上报，不再画加载画面。
-     加载页统一由宿主（src/components/room3d.vue）那一层负责（小猫跑酷 + 进度条）：
-     以前这里还有一套"拾光 + 进度条"的浅色页面，用户会先看到它、再看到宿主的页面，
-     看起来像两个加载页（2026-10-21 用户反馈）。现在这里只留一个隐藏节点做标记，
-     真实下载字节通过 postMessage 报给父页面，进度条因此是真实进度。 -->
 <!--TP_LOADER_START 由 scripts/inject-room3d-loader.mjs 生成，会被整块替换，别手改-->
 <!-- ★ 只做进度上报，不再画加载画面。
      加载页统一由宿主（src/components/room3d.vue）那一层负责（小猫跑酷 + 进度条）：
@@ -118,7 +108,7 @@
   // 预计总量：按产物体积 × 传输比估的固定值（每次注入时重算，不会留旧值）。
   // ★ 不再拿 localStorage 里"上次实测"当分母 —— Cocos 的部分请求不写进 Resource Timing，
   //   实测值会明显偏小，用它当分母会让进度条一开局就冲到 90%+（线上实测踩过）。
-  var EST = 34057906;
+  var EST = 34105501;
   var done = false
   function finish() {
     if (done) return
