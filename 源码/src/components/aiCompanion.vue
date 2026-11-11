@@ -10,37 +10,44 @@
           <span class="ai-name">小橘</span>
           <span class="ai-badge">◆ AI记忆伙伴</span>
         </div>
-        <span class="ai-sub">陪你回望每一段时光</span>
+        <span class="ai-sub">想说什么都行，我帮你记着</span>
       </div>
-      <span class="head-spark">✦</span>
-      <!-- 小猫的嗓子开关：开=念出回答，关=只打字（默认开） -->
-      <button
-        class="head-voice"
-        :class="{ on: speakOn, busy: speaking }"
-        type="button"
-        :title="speakOn ? '小橘会念出回答 · 点击静音' : '小橘只看不说 · 点击打开语音'"
-        :aria-pressed="speakOn"
-        aria-label="小猫语音"
-        @click="toggleSpeak"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 9.5v5h3.4L12 18.4V5.6L7.4 9.5H4Z" />
-          <path v-if="speakOn" d="M15.6 9.2a4.2 4.2 0 0 1 0 5.6M18.2 6.6a7.6 7.6 0 0 1 0 10.8" />
-          <path v-else d="M16 9.5l5 5m0-5-5 5" />
-        </svg>
-      </button>
-      <button
-        class="head-clear"
-        type="button"
-        title="清空聊天记录"
-        aria-label="清空聊天记录"
-        @click="clearChat"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 7h16M9 7V5h6v2m-8 0 1 13h8l1-13M10 11v6m4-6v6" />
-        </svg>
-      </button>
-      <button class="ai-close" type="button" aria-label="关闭" @click="emit('close')">×</button>
+      <!-- ★ 2026-11-11：原来三个图标只有 17px、没字，用户看不出 🔊/🗑 是干什么的。
+           现在统一成 36×38 的方块 + 图标下一行小字（朗读 / 清空 / 收起），
+           不用悬停、不用猜，一眼就知道点下去会发生什么。
+           那颗 ✦ 装饰删掉了 —— 它不可点，但和按钮长得很像，反而误导。 -->
+      <div class="head-tools">
+        <button
+          class="head-tool"
+          :class="{ on: speakOn, busy: speaking }"
+          type="button"
+          :title="speakOn ? '小橘会念出回答 · 点击静音' : '小橘只看不说 · 点击打开语音'"
+          :aria-pressed="speakOn"
+          @click="toggleSpeak"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9.5v5h3.4L12 18.4V5.6L7.4 9.5H4Z" />
+            <path v-if="speakOn" d="M15.6 9.2a4.2 4.2 0 0 1 0 5.6M18.2 6.6a7.6 7.6 0 0 1 0 10.8" />
+            <path v-else d="M16 9.5l5 5m0-5-5 5" />
+          </svg>
+          <span class="head-tool-cap">朗读</span>
+        </button>
+        <button
+          class="head-tool"
+          type="button"
+          title="清空聊天记录"
+          @click="clearChat"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16M9 7V5h6v2m-8 0 1 13h8l1-13M10 11v6m4-6v6" />
+          </svg>
+          <span class="head-tool-cap">清空</span>
+        </button>
+        <button class="head-tool" type="button" aria-label="关闭" @click="emit('close')">
+          <span class="head-x">×</span>
+          <span class="head-tool-cap">收起</span>
+        </button>
+      </div>
     </header>
 
     <div ref="listRef" class="ai-list">
@@ -65,6 +72,24 @@
         <p class="bubble">
           小橘正在想<span class="dot">·</span><span class="dot">·</span><span class="dot">·</span>
         </p>
+      </div>
+
+      <!-- ★ 2026-11-11 新用户「不知道跟猫说什么」：空会话时给四句起手式，
+           点一下就当作用户消息发出去，聊过一轮自动收起。
+           比写一段说明文字有用得多 —— 让人先看到"原来可以这样问"。 -->
+      <div v-if="showStarters" class="ai-starters">
+        <span class="ai-starters-cap">不知道说什么？点一句试试 👇</span>
+        <div class="ai-starter-row">
+          <button
+            v-for="s in STARTERS"
+            :key="s"
+            class="ai-starter"
+            type="button"
+            @click="send(s)"
+          >
+            {{ s }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -119,7 +144,7 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { chatWithDeepSeek, deepSeekReady, refreshAiStatus } from '@/api/deepseek'
 import { cloudApi } from '@/api/cloud'
 import { useMemoriesStore } from '@/stores/memories'
@@ -179,7 +204,15 @@ const companion = useCompanionStore()
 // 原先存在 localStorage 的固定 key 里 —— 那台浏览器上换个人登录, 上一个人的聊天记录
 // 会原样留在这里, AI 就顺着别人的上下文接着聊。现在改成后端 ai_conversation /
 // ai_message(查询时带 user_id 归属校验), 换账号就换一份, 互相看不到。
-const GREETING = '你好呀, 我是小橘。今天想从哪一段记忆聊起?'
+const GREETING = '你好呀，我是小橘。想不起从哪说起也没关系 —— 点下面任一句试试，或者直接打字。'
+// 起手式：新用户对着空输入框最常见的反应是"不知道能问什么"。
+// 这四句覆盖了聊天/记录/检索/提醒四种能力，点一次就把用法演示给他看。
+const STARTERS = [
+  '帮我记下今天的小事',
+  '我最近有点累，陪我说说',
+  '我上个月都记了些什么？',
+  '提醒我明天要做什么',
+]
 const convId = ref(0) // 0 = 未登录或还没拿到会话
 let seq = 0
 const messages = ref([])
@@ -253,6 +286,10 @@ async function resetForUser(uid) {
 
 const draft = ref('')
 const thinking = ref(false)
+// 只在"还没聊过"时展示起手式（开场白本身也算一条，所以阈值是 1）
+const showStarters = computed(
+  () => !thinking.value && messages.value.filter((m) => m.role !== 'memories').length <= 1,
+)
 const listRef = ref(null)
 
 // 每次请求携带的最近对话条数(超出部分不发送给模型)
@@ -907,6 +944,10 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* 右上角那组按钮是 flex: none，标题必须允许收缩，
+     否则「想说什么都行，我帮你记着」会把面板顶破 */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .head-line {
@@ -932,47 +973,55 @@ watch(
 
 .ai-sub {
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: #a08063;
 }
 
-.head-spark {
+/* ★ 2026-11-11：右上角三颗按钮放大成 38×40 的方块，图标下面带一行小字，
+   不用悬停看 title 就知道 🔊=朗读 / 🗑=清空 / ×=收起。
+   原来只有 15~17px 的裸图标，实测新用户把它们当成装饰。 */
+.head-tools {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
   margin-left: auto;
-  color: #f2c14e;
-  font-size: 17px;
+  flex: none;
 }
 
-.head-clear {
+.head-tool {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 38px;
+  height: 40px;
+  padding: 0;
   border: none;
+  border-radius: 11px;
   background: transparent;
-  color: #b3a79c;
+  color: #a9998a;
   cursor: pointer;
+  transition: background 0.18s, color 0.18s;
 }
 
-.head-clear:hover {
+.head-tool:hover {
+  background: rgba(224, 134, 90, 0.12);
   color: #e0865a;
 }
 
-/* 小猫的嗓子开关：开启时是暖橘色 + 轻微呼吸，说话时点一下跳动，
-   关掉是灰色 + 一个叉，用户一眼能看出"现在会不会出声" */
-.head-voice {
-  display: flex;
-  border: none;
-  background: transparent;
-  color: #b3a79c;
-  cursor: pointer;
-  transition: color 0.2s;
+.head-tool:active {
+  background: rgba(224, 134, 90, 0.2);
 }
 
-.head-voice:hover {
+/* 语音开着 = 暖橘，一眼看出"现在会不会出声" */
+.head-tool.on {
   color: #e0865a;
 }
 
-.head-voice.on {
-  color: #e0865a;
-}
-
-.head-voice.busy svg {
+.head-tool.busy svg {
   animation: voicePulse 0.9s ease-in-out infinite;
 }
 
@@ -981,9 +1030,9 @@ watch(
   50% { transform: scale(1.18); opacity: 0.65; }
 }
 
-.head-voice svg {
-  width: 16px;
-  height: 16px;
+.head-tool svg {
+  width: 19px;
+  height: 19px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -991,23 +1040,19 @@ watch(
   stroke-linejoin: round;
 }
 
-.head-clear svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.ai-close {
-  border: none;
-  background: transparent;
-  color: #b3a79c;
-  font-size: 20px;
+.head-tool-cap {
+  font-size: 9.5px;
   line-height: 1;
-  cursor: pointer;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+/* 收起按钮是字不是图标，高度跟图标对齐，不然三颗按钮不在一条水平线上 */
+.head-x {
+  display: block;
+  height: 19px;
+  font-size: 19px;
+  line-height: 19px;
 }
 
 /* ---- 消息列表 ---- */
@@ -1107,6 +1152,62 @@ watch(
 .mem-cap {
   font-size: 12px;
   color: #5c4f45;
+}
+
+/* 起手式：四个小胶囊，点一下直接把这句话当成用户消息发出去。
+   比写「你可以这样问」的说明文字有效 —— 让人先看到一句现成的话。 */
+.ai-starters {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 2px 0 4px 38px;
+}
+
+.ai-starters-cap {
+  font-size: 12px;
+  color: #a08063;
+  letter-spacing: 0.3px;
+}
+
+/* 2×2 网格而不是 flex-wrap：四条长短不一，wrap 会排成 3+1，看着像漏了一个 */
+.ai-starter-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.ai-starter {
+  padding: 7px 12px;
+  border: 1px solid #f0d9c4;
+  border-radius: 999px;
+  background: rgba(255, 251, 245, 0.95);
+  color: #8c6a4e;
+  font-size: 12.5px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s, color 0.16s;
+}
+
+.ai-starter:hover {
+  background: #ffeede;
+  border-color: #f0bc92;
+  color: #cf7434;
+}
+
+.ai-starter:active {
+  transform: scale(0.97);
+}
+
+/* 手机上气泡没有左侧头像缩进，起手式跟着贴边；四个胶囊排成两行 */
+@media (max-width: 767.98px), (max-width: 1024px) and (orientation: portrait) {
+  .ai-starters {
+    padding-left: 0;
+  }
+
+  .ai-starter {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
 }
 
 /* ---- 输入行 ---- */

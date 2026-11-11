@@ -158,7 +158,19 @@
           </div>
 
           <div class="entry-list">
-            <article v-for="e in filtered" :key="e.id" class="entry-card">
+            <article v-for="(e, i) in filtered" :key="e.id" class="entry-card">
+              <!-- ★ 2026-11-11：新用户不知道右上角那个「↗」是干什么的。
+                   在第一张卡片顶上直接写一行说明，点它本身就能分享（比看小图标容易）。
+                   账号里已经有一条公开记忆、或者用户点过 ×，这行就不再出现。 -->
+              <div v-if="showShareTip && i === 0 && !e.is_public" class="entry-tip">
+                <button class="entry-tip-go" type="button" @click.stop="toggleShare(e)">
+                  <span class="tip-long">↗ 分享到广场，别人能看见、能评论</span>
+                  <span class="tip-short">↗ 点这里分享</span>
+                </button>
+                <button class="entry-tip-x" type="button" aria-label="知道了" @click.stop="dismissShareTip">
+                  ×
+                </button>
+              </div>
               <!-- 分享到广场: 卡片右上角胶囊, 与下方「公开/隐私」是两个独立入口, 状态同源 -->
               <button
                 v-if="!browseUid"
@@ -820,6 +832,32 @@ function exitBrowse() {
 
 // 数据源: 浏览模式用他人公开条目, 否则用自己的记忆库
 const sourceEntries = computed(() => (browseUid.value ? browseEntries.value : store.entries))
+
+// 「分享到广场」首次提示：只在"这个账号一条公开记忆都没有"时出现一次。
+// 关掉这件事记在 localStorage（纯教学提示，不影响任何数据），
+// 真正分享过一条之后 neverShared 变 false，提示自己就没了。
+const SHARE_TIP_KEY = 'tp:share-tip-seen'
+const shareTipClosed = ref(false)
+try {
+  shareTipClosed.value = localStorage.getItem(SHARE_TIP_KEY) === '1'
+} catch {}
+
+const neverShared = computed(() => !sourceEntries.value.some((e) => e.is_public))
+const showShareTip = computed(
+  () =>
+    !browseUid.value &&
+    !shareTipClosed.value &&
+    neverShared.value &&
+    sourceEntries.value.length > 0,
+)
+
+function dismissShareTip() {
+  shareTipClosed.value = true
+  try {
+    localStorage.setItem(SHARE_TIP_KEY, '1')
+  } catch {}
+}
+
 
 // 操作提示横幅
 const tipText = ref('')
@@ -2426,6 +2464,10 @@ async function doRemove() {
  
 .entry-photo {
   width: 100%;
+  /* flex: none —— 卡片是 column flex，同一行里内容最多那张会把行高撑到 max，
+     其他卡片的照片区就被 flex-shrink 压扁（加了一行分享提示后实测 96 → 60px）。
+     照片区高度是设计值，不该随内容缩放。 */
+  flex: none;
   height: 96px;
   border-radius: 10px;
   overflow: hidden;
@@ -2492,6 +2534,60 @@ async function doRemove() {
 .entry-del:hover,
 .entry-vis:hover {
   color: #e0865a;
+}
+
+/* 首次分享提示：卡片顶部一行浅橙说明，不是一个"教程"，而是一个能直接点的按钮。
+   手机上卡片只有约 100px 宽，长文案会折成四行，所以用 tip-short 换成短句。 */
+.entry-tip {
+  /* 用 block + 绝对定位的 ×，而不是 flex 两列：
+     flex 版里按钮被压成 60px 宽的窄条，一句话折成四行、右边留一大片空白。 */
+  position: relative;
+  padding: 6px 24px 6px 8px;
+  /* 卡片右上角的「↗」胶囊是绝对定位（top:8 / 高 22），提示泡必须让开，
+     否则第一行字正好被它压住 */
+  margin: 24px 0 2px;
+  /* 卡片是 column flex + grid 拉齐行高：提示泡一出现，下面的照片区会被
+     挤矮（实测 96px → 48px）。这一行必须不能被收缩。 */
+  flex: none;
+  border: 1px dashed #f0bc92;
+  border-radius: 8px;
+  background: #fff6ec;
+  color: #c96f34;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.entry-tip-go {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.entry-tip-x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(201, 111, 52, 0.12);
+  color: #c96f34;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.tip-short {
+  display: none;
 }
 
 /* 分享到广场: 卡片右上角胶囊。未分享时暖橙底强调, 已分享后退为绿色淡底表示「已在广场」 */
@@ -4394,6 +4490,33 @@ async function doRemove() {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* 首次分享提示：100px 宽的卡片塞不下长句，换短句 + 缩字号，一行放得下 */
+  .entry-tip {
+    margin-top: 20px;
+    padding: 3px 15px 3px 4px;
+    font-size: 9.5px;
+  }
+
+  .entry-tip-go {
+    font-size: 9.5px;
+    line-height: 1.35;
+  }
+
+  .tip-long {
+    display: none;
+  }
+
+  .tip-short {
+    display: inline;
+  }
+
+  .entry-tip-x {
+    width: 14px;
+    height: 14px;
+    font-size: 10px;
+    line-height: 14px;
   }
 
   /* 卡片右上角「已分享」：116px 宽放不下五个字，退化成只有一个箭头/对勾的圆点 */

@@ -1025,7 +1025,19 @@ function executeConfirm() {
      760~768 之间会两边都不生效）。核心问题是**图标栏里的按钮只有 24×38**：
      `.index-side` 的 align-items:center 让 `.index-nav` 收缩到内容宽，按钮的 width:100%
      于是只剩图标宽 —— 指尖点十次中三次。这里把导航列撑满、按钮做成 44×44 的标准热区。 */
-@media (max-width: 767.98px), (max-width: 1024px) and (orientation: portrait) {
+@media (max-width: 767.98px), (max-width: 1024px) and (orientation: portrait) {
+  /* ★ 2026-11-11：AI 面板原来是「宽 30% / 高 72%」，390 竖屏算下来只有 117px 宽，
+       三个按钮就占满一行，气泡全被挤成一列单字。手机上改成贴底的整宽抽屉。 */
+  .ai-fixed {
+    left: 10px;
+    right: 10px;
+    top: auto;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    width: auto;
+    height: 68%;
+    max-height: 560px;
+  }
+
   .index-side {
     flex: 0 0 56px;
     align-items: center;
