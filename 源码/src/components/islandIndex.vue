@@ -314,6 +314,7 @@ import { useMemoriesStore } from '@/stores/memories'
 import { useGuideStore } from '@/stores/guide'
 import { cloudApi } from '@/api/cloud'
 import IdleThought from './idleThought.vue'
+import { shareLinkOf } from '@/sharecode'
 import MemTimeline from './memTimeline.vue'
 import { islandSpriteStyle, ISLAND_ARTS } from '@/data/islands'
 
@@ -614,7 +615,7 @@ async function shareIsle(isle) {
       })
     }
     if (!rec?.token) throw new Error('生成失败，请稍后再试')
-    shareLink.value = `${location.origin}/share/${rec.token}`
+    shareLink.value = shareLinkOf(rec.token)
     try {
       await navigator.clipboard.writeText(shareLink.value)
       toast('链接已复制，发给朋友就能打开')

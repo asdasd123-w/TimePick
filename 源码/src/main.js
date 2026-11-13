@@ -5,6 +5,10 @@ import App from './App.vue'
 import router from './router'
 import { applyFontSize, getFontSize } from './fontSize'
 import { startFpsWatch } from './perf'
+import { captureShareCode } from './sharecode'
+
+// 先记住网关的 sharecode（分享链接里要带，见 src/sharecode.js）
+captureShareCode()
 // 首屏(欢迎页)背景已挪到 public/bg/ 下（文件名不带 hash），
 // 预加载改在 index.html 里用 <link rel="preload"> 直接发起 —— 不用等 JS 执行。
 

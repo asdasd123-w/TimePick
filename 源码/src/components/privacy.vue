@@ -188,6 +188,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { cloudApi } from '@/api/cloud'
 import { useCloudAuthStore } from '@/stores/cloudAuth'
+import { shareLinkOf } from '@/sharecode'
 // ★ 2026-10-27：背景图在 CSS 里也要用一份（铺满用的模糊垫底层），所以显式 import 拿 URL
 import PAGE_BG from '@/assets/opt/privacyBackground.webp'
 // ★ 2026-10-29：铺满用的垫底层不再在运行时打 filter: blur(26px)，改用「同一张图预烘焙的
@@ -259,7 +260,7 @@ function pillText(status) {
 }
 
 async function copyLink(s) {
-  const link = `${window.location.origin}/share/${s.token}`
+  const link = shareLinkOf(s.token)
   try {
     await navigator.clipboard.writeText(link)
     toast(`「${s.name}」的链接已复制`)

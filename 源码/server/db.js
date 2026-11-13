@@ -13,16 +13,60 @@ fs.mkdirSync(dataDir, { recursive: true })
 
 // 可用 DB_PATH 指向其它库文件(测试/备份时避免污染正式数据)
 // 驱动: 本机走原生 better-sqlite3; 部署环境没有编译工具时自动落回 WASM 版
-const db = await openDatabase(process.env.DB_PATH || path.join(dataDir, 'timepick.db'))
+const DB_FILE = process.env.DB_PATH || path.join(dataDir, 'timepick.db')
+const SCHEMA_SQL = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8')
+
+// 打开库并建表。
 // WAL 需要额外的 -wal / -shm 文件: 某些环境(只读挂载、网络盘、被安全软件锁住)建不了,
 // 这时整站会起不来 —— 所以失败就退回 SQLite 默认的 delete 日志模式, 功能不受影响。
-try {
-  db.pragma('journal_mode = WAL')
-} catch {
-  console.warn('[db] WAL 不可用, 已退回默认日志模式')
+async function openInitialized(file) {
+  const d = await openDatabase(file)
+  try {
+    try {
+      d.pragma('journal_mode = WAL')
+    } catch {
+      console.warn('[db] WAL 不可用, 已退回默认日志模式')
+    }
+    d.pragma('foreign_keys = ON')
+    d.exec(SCHEMA_SQL)
+  } catch (e) {
+    // 立刻松手: 不关句柄的话坏库文件还被占用, 后面改名/删除都会失败
+    try {
+      d.close()
+    } catch {
+      /* 已经关掉或驱动不支持, 忽略 */
+    }
+    throw e
+  }
+  return d
 }
-db.pragma('foreign_keys = ON')
-db.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'))
+
+// ★ 坏库自愈: 库文件被截断(上传/解压中断)、残留 -wal 与主库不匹配、或跨 SQLite 版本
+//   移植时, 读 schema 会抛 "malformed database schema / database disk image is malformed",
+//   进程直接退出 —— 在沙箱里表现成「服务没有在端口上响应」, 整个站点打不开。
+//   这里把坏库改名留档, 重建一个空库先把服务拉起来, 数据随后用 admin/data/import 回灌。
+let db
+try {
+  db = await openInitialized(DB_FILE)
+} catch (e) {
+  if (!/malformed|not a database|disk image|corrupt/i.test(e?.message || '')) throw e
+  console.warn('[db] 库文件损坏, 已留档坏库并重建空库:', e.message)
+  for (const suf of ['', '-wal', '-shm']) {
+    const p = DB_FILE + suf
+    if (!fs.existsSync(p)) continue
+    try {
+      fs.renameSync(p, `${p}.corrupt-${Date.now()}`)
+    } catch {
+      /* 改名失败就硬删, 反正已经读不了 */
+      try {
+        fs.rmSync(p, { force: true })
+      } catch {
+        /* 都不行就交给下面重新打开时的报错 */
+      }
+    }
+  }
+  db = await openInitialized(DB_FILE)
+}
 
 // 轻量迁移: 旧库补列 / 补表
 const userCols = db.prepare('PRAGMA table_info(user)').all().map((c) => c.name)
@@ -474,5 +518,58 @@ try {
 } catch (e) {
   console.warn('[db] 历史记忆标题截断跳过:', e.message)
 }
+
+// ★ 空库自动种子(2026-11-14): 发布包里的 server/data/seed.json 是线上数据快照。
+//   为什么需要: 沙箱发布是「清空目录再解压」, 但库文件不一定会被传上去(也可能传到一半被截断),
+//   服务就会以一个空库起来 —— 站点能开, 但账号/记忆/广场全没了。
+//   这里只在 user 表为空时导入种子, 已有任何用户就整段跳过, 绝不覆盖真实数据。
+function seedIfEmpty() {
+  // 种子与库文件放同一目录(默认 server/data), DB_PATH 指到别处时也跟着走
+  const seedFile = path.join(path.dirname(DB_FILE), 'seed.json')
+  if (!fs.existsSync(seedFile)) return
+  const cnt = db.prepare('SELECT COUNT(*) AS c FROM user').get()
+  if (Number(cnt?.c) > 0) return
+  let tables
+  try {
+    tables = JSON.parse(fs.readFileSync(seedFile, 'utf8'))
+  } catch (e) {
+    console.warn('[db] seed.json 解析失败, 跳过:', e.message)
+    return
+  }
+  const known = new Set(
+    db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name)
+  )
+  let rowsIn = 0
+  try {
+    db.pragma('foreign_keys = OFF')
+    for (const [table, rows] of Object.entries(tables)) {
+      if (!known.has(table) || !Array.isArray(rows) || !rows.length) continue
+      const cols = Object.keys(rows[0]).filter((c) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(c))
+      if (!cols.length) continue
+      db.exec(`DELETE FROM "${table}"`)
+      const stmt = db.prepare(
+        `INSERT OR REPLACE INTO "${table}" (${cols.map((c) => '"' + c + '"').join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`
+      )
+      for (const row of rows) {
+        try {
+          stmt.run(...cols.map((c) => (row[c] === undefined ? null : row[c])))
+          rowsIn++
+        } catch {
+          /* 单行失败不影响其它行 */
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[db] 种子导入中断:', e.message)
+  } finally {
+    try {
+      db.pragma('foreign_keys = ON')
+    } catch {
+      /* 驱动不支持时忽略 */
+    }
+  }
+  console.log(`[db] 空库已从 seed.json 初始化 ${rowsIn} 行`)
+}
+seedIfEmpty()
 
 export default db

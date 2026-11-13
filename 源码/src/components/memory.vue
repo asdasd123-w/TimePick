@@ -158,7 +158,7 @@
           </div>
 
           <div class="entry-list">
-            <article v-for="(e, i) in filtered" :key="e.id" class="entry-card">
+            <article v-for="(e, i) in filtered" :key="e.id" class="entry-card">
               <!-- ★ 2026-11-11：新用户不知道右上角那个「↗」是干什么的。
                    在第一张卡片顶上直接写一行说明，点它本身就能分享（比看小图标容易）。
                    账号里已经有一条公开记忆、或者用户点过 ×，这行就不再出现。 -->
@@ -777,6 +777,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMemoriesStore, TIME_OPTIONS } from '@/stores/memories'
 import { useCloudAuthStore } from '@/stores/cloudAuth'
 import { useGuideStore } from '@/stores/guide'
+import { shareLinkOf } from '@/sharecode'
 import { cloudApi } from '@/api/cloud'
 import { useDebouncedRef, throttleSubmit } from '@/composables/useRateLimit'
 import { ISLAND_OPTIONS } from '@/data/islands'
@@ -1788,7 +1789,7 @@ async function makeShareLink(e) {
       })
     }
     if (!rec?.token) throw new Error('生成失败，请稍后再试')
-    shareLink.value = `${location.origin}/share/${rec.token}`
+    shareLink.value = shareLinkOf(rec.token)
     try {
       await navigator.clipboard.writeText(shareLink.value)
       tip('链接已复制，发给朋友就能打开')
