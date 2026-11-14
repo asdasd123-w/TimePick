@@ -164,6 +164,8 @@
             </button>
           </form>
 
+          <!-- 微信扫码走 WorkBuddy 云服务，只在云托管域名上有入口（自建服务器上隐藏，免得出一个点下去必错的按钮） -->
+          <template v-if="cloudHosted">
           <div class="wa-or"><span>或 微信扫码注册</span></div>
 
           <!-- 微信扫码即注册：扫完自动建号并登录，昵称/头像跟随微信 -->
@@ -201,10 +203,11 @@
             </svg>
             {{ wxBusy ? '正在跳转微信…' : '微信扫码注册' }}
           </button>
+          </template>
         </div>
 
         <!-- 微信扫码（登录 tab 的备用入口）: 首次扫码自动注册, 之后再扫就是登录 -->
-        <template v-if="tab === 'login'">
+        <template v-if="tab === 'login' && cloudHosted">
           <div class="wa-or"><span>或</span></div>
           <button class="wa-wechat" type="button" :disabled="busy || wxBusy" @click="loginByWechat">
             <svg class="wa-wx-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -225,7 +228,7 @@
         <p class="wa-foot">
           {{
             tab === 'login'
-              ? '还没有账号? 注册可以用微信扫码, 也可以直接用手机号'
+              ? (cloudHosted ? '还没有账号? 注册可以用微信扫码, 也可以直接用手机号' : '还没有账号? 切到「注册」用手机号建一个')
               : '注册后自动同步广场、记忆与 AI 会话'
           }}
         </p>
@@ -241,7 +244,7 @@
 import { ref } from 'vue'
 import { useCloudAuthStore } from '@/stores/cloudAuth'
 import ForgotPassword from './forgotPassword.vue'
-import { startLocalWechatLogin } from '@/cloud/client'
+import { cloudHosted, startLocalWechatLogin } from '@/cloud/client'
 import { takeWechatLoginError } from '@/cloud/localLogin'
 
 /*正则判断手机号*/ 

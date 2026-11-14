@@ -13,6 +13,7 @@
 // 云端公告：不登录也能看到的公开只读数据（云数据库 tp_notice）。
 // 挂在欢迎页，既是一条真的产品公告，也证明「浏览器 → 数据面 → 云数据库」这条链路是通的。
 import { onMounted, ref } from 'vue'
+import { cloudHosted } from '@/cloud/client'
 import { listNotices } from '@/cloud/backup'
 
 const KEY = 'tp_cloud_notice_closed'
@@ -24,6 +25,8 @@ function dismiss() {
 }
 
 onMounted(async () => {
+  // 公告存在 WorkBuddy 云数据库里，自建服务器上按 Origin 必然 403 —— 直接不请求
+  if (!cloudHosted) return
   try {
     const rows = await listNotices(3)
     const closed = sessionStorage.getItem(KEY)

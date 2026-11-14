@@ -452,6 +452,7 @@ import { avatarOf } from '@/data/avatar'
 import { applyFontSize, getFontSize } from '@/fontSize'
 import petSprite from './petSprite.vue'
 import CloudPanel from './cloudPanel.vue'
+import { cloudHosted } from '@/cloud/client'
 
 const router = useRouter()
 const auth = useCloudAuthStore()
@@ -632,7 +633,8 @@ const linkRows = [
   { label: '拾光云备份', action: 'cloud' },
   { label: '帮助与反馈', route: 'feedback' },
   { label: '关于拾光', action: 'about' },
-]
+  // 云备份走 WorkBuddy 云存储，自建服务器上没有这条路，不给入口
+].filter((r) => r.action !== 'cloud' || cloudHosted)
 
 // 拾光云备份弹窗（原来是一张独立卡片，现在收进上面的列表）
 const cloudRef = ref(null)

@@ -29,6 +29,16 @@ try {
 export const cloud = client
 export const cloudReady = !!client
 
+/**
+ * 当前是不是跑在云托管的发布域名上。
+ * 微信扫码登录 / 平台公告走的是 WorkBuddy 云服务，它按 Origin 校验发布域名，
+ * 换到自建服务器（IP 或自有域名）后必然 403 —— 所以那几处入口要按这个开关隐藏，
+ * 而不是留一个点下去只会报错的按钮。手机号 + 密码（本地账号）不受影响。
+ */
+export const cloudHosted =
+  typeof location !== 'undefined' && !!location.origin &&
+  location.origin === new URL(CLOUD_ENDPOINT).origin
+
 /** 把 SDK 的 error 对象转成能直接给用户看的一句话 */
 export function cloudErrorText(error, fallback = '云端服务暂时不可用，请稍后再试') {
   if (!error) return fallback
