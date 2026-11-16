@@ -82,7 +82,12 @@
   [x] ★ Git 提交历史是分模块的多次提交，不是一次性全推
       —— 已在 .git 里建好：main 分支、按模块切分的提交历史，源码与 3D 工程都已纳入（见第七条）
   [ ] 压缩包按"学校+姓名+手机号"命名
-  [x] 在线演示地址已记下：https://timepick-memory.app.workbuddy.host/
+  [x] 在线演示地址已记下：http://101.201.54.16/
+      ★ 2026-11-14 起从 WorkBuddy 云托管迁到阿里云 ECS（2C2G / Ubuntu 22.04 / 华北2）。
+        原地址 https://timepick-memory.app.workbuddy.host 已主动下线（现在访问是 404），
+        如果你在别处看到那个旧链接，一律以本地址为准。
+        现在是「纯 IP + http」，浏览器地址栏要带 http:// 前缀，否则会被当成搜索词；
+        手机用流量或 Wi-Fi 都能直接打开，账号与数据与电脑端完全一致。
   [x] 压缩包里没有 .env / .env.local / *.db / server/data /
       （本包已经排除；如果你自己往里拷过东西，再核一遍）
 
@@ -122,7 +127,7 @@
        线上现役产物是 index-CZPvPwKK.js + index-BUXEXWj6.css（55,329 字节）。
 
   ④ 运行时与线上
-     https://timepick-memory.app.workbuddy.host/ 已用本包源代码部署，实测：
+     http://101.201.54.16/ 已用本包源代码部署，实测：
        首页 HTTP 200 · /room3d/index.html 200 · /room3d/src/settings.json 200
        /api 返回 code 0（ai / aiImage / aiVideo 均为 true，说明密钥已生效）
        静态资源响应头 immutable / max-age=1年

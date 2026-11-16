@@ -150,7 +150,7 @@ npm run data:backup     # → server/data/backups/timepick-20260923-122950.db
 ### 3.3 现在的结构
 
 ```
-浏览器 → https://timepick-memory.app.workbuddy.host/
+浏览器 → http://101.201.54.16/
              ├── /            → 前端页面（index.html + JS/CSS）
              ├── /index/memory→ 同上（SPA 兜底，刷新不 404）
              ├── /api         → Express 接口（读写 SQLite）

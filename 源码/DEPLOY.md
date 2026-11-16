@@ -61,7 +61,7 @@ npm run build                         # 会同时产出 dist/ 和 webroot/
 ### C. 每次发布后
 
 ```bash
-npm run verify:online -- https://timepick-memory.app.workbuddy.host
+npm run verify:online -- http://101.201.54.16
 ```
 
 ### 数据搬运的几个命令
