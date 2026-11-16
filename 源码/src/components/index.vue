@@ -854,8 +854,10 @@ function executeConfirm() {
   position: relative;
   min-width: 0;
   overflow: hidden;
-  /* 与背景图上下边缘色调接近, 完整显示时的留边能自然融入 */
-  background: linear-gradient(180deg, #cfe2f6 0%, #f6e7ea 100%);
+  /* ★ 2026-11-15：原来是冷色渐变(#cfe2f6 → #f6e7ea)，跟三个"整页海报"页面（记忆库/隐私/反馈）
+     的暖米色完全不是一个调子，海报 contain 留白时露出来就是一圈蓝紫色的框，看着像阴影。
+     改成暖米色，与海报边缘的桌面/墙面色贴近，留白不再抢眼。 */
+  background: #eddfcd;
 }
 
 /* 子路由切换: 淡入+轻微上浮/沉降, 替代硬切 */
@@ -1025,7 +1027,7 @@ function executeConfirm() {
      760~768 之间会两边都不生效）。核心问题是**图标栏里的按钮只有 24×38**：
      `.index-side` 的 align-items:center 让 `.index-nav` 收缩到内容宽，按钮的 width:100%
      于是只剩图标宽 —— 指尖点十次中三次。这里把导航列撑满、按钮做成 44×44 的标准热区。 */
-@media (max-width: 767.98px), (max-width: 1024px) and (orientation: portrait) {
+@media (max-width: 767.98px), (max-width: 1024px) and (orientation: portrait) {
   /* ★ 2026-11-11：AI 面板原来是「宽 30% / 高 72%」，390 竖屏算下来只有 117px 宽，
        三个按钮就占满一行，气泡全被挤成一列单字。手机上改成贴底的整宽抽屉。 */
   .ai-fixed {

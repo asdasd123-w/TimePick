@@ -315,6 +315,7 @@ import { useGuideStore } from '@/stores/guide'
 import { cloudApi } from '@/api/cloud'
 import IdleThought from './idleThought.vue'
 import { shareLinkOf } from '@/sharecode'
+import { copyText } from '@/utils/clipboard'
 import MemTimeline from './memTimeline.vue'
 import { islandSpriteStyle, ISLAND_ARTS } from '@/data/islands'
 
@@ -616,12 +617,9 @@ async function shareIsle(isle) {
     }
     if (!rec?.token) throw new Error('生成失败，请稍后再试')
     shareLink.value = shareLinkOf(rec.token)
-    try {
-      await navigator.clipboard.writeText(shareLink.value)
-      toast('链接已复制，发给朋友就能打开')
-    } catch {
-      toast('链接已生成，点弹层里的按钮复制')
-    }
+    // http 下 navigator.clipboard 不存在，必须走 copyText 的 execCommand 兜底
+    if (await copyText(shareLink.value)) toast('链接已复制，发给朋友就能打开')
+    else toast('链接已生成，点下面的按钮复制')
   } catch (e) {
     toast(e?.message || '生成分享链接失败')
   } finally {
@@ -630,12 +628,8 @@ async function shareIsle(isle) {
 }
 
 async function copyShareLink() {
-  try {
-    await navigator.clipboard.writeText(shareLink.value)
-    toast('链接已复制')
-  } catch {
-    toast('复制失败，请点输入框全选手动复制')
-  }
+  if (await copyText(shareLink.value)) toast('链接已复制')
+  else toast('复制失败，请长按输入框里的链接手动复制')
 }
 
 function openEdit(isle) {

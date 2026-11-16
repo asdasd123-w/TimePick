@@ -189,6 +189,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { cloudApi } from '@/api/cloud'
 import { useCloudAuthStore } from '@/stores/cloudAuth'
 import { shareLinkOf } from '@/sharecode'
+import { copyText } from '@/utils/clipboard'
 // ★ 2026-10-27：背景图在 CSS 里也要用一份（铺满用的模糊垫底层），所以显式 import 拿 URL
 import PAGE_BG from '@/assets/opt/privacyBackground.webp'
 // ★ 2026-10-29：铺满用的垫底层不再在运行时打 filter: blur(26px)，改用「同一张图预烘焙的
@@ -261,12 +262,9 @@ function pillText(status) {
 
 async function copyLink(s) {
   const link = shareLinkOf(s.token)
-  try {
-    await navigator.clipboard.writeText(link)
-    toast(`「${s.name}」的链接已复制`)
-  } catch {
-    toast(`链接：${link}`)
-  }
+  // http 下 navigator.clipboard 不存在，必须走 copyText 的 execCommand 兜底
+  if (await copyText(link)) toast(`「${s.name}」的链接已复制`)
+  else toast(`复制失败，链接：${link}`)
 }
 
 async function cancelShare(s) {
@@ -482,15 +480,18 @@ onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 .privacy-figure::before {
   content: '';
   position: absolute;
-  inset: -40px;
+  inset: -70px;
   /* 预烘焙的模糊底图（同一张图缩到 96×63 后直接画进文件里），这里不做任何 filter：
-     整屏 filter 层在 macOS 上会出现合成器分块接缝（用户拍屏看到一条绿色细线）。 */
-  background-image: var(--pv-bg-blur, none);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+     整屏 filter 层在 macOS 上会出现合成器分块接缝（用户拍屏看到一条绿色细线）。
+     ★ 2026-11-15：再叠一层半透明白 —— 模糊底图本身比主图暗，放大后就是一圈"阴影"，
+     提亮之后留白处才和主图接得上。 */
+  background-image:
+    linear-gradient(rgba(255, 252, 247, 0.22), rgba(255, 252, 247, 0.22)), var(--pv-bg-blur, none);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
   /* 老浏览器（不支持新图/变量时为 none）仍能靠底色兜住，不至于出现透明洞 */
-  background-color: #e6d9c9;
+  background-color: #f0e2d2;
   pointer-events: none;
 }
 

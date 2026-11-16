@@ -778,6 +778,7 @@ import { useMemoriesStore, TIME_OPTIONS } from '@/stores/memories'
 import { useCloudAuthStore } from '@/stores/cloudAuth'
 import { useGuideStore } from '@/stores/guide'
 import { shareLinkOf } from '@/sharecode'
+import { copyText } from '@/utils/clipboard'
 import { cloudApi } from '@/api/cloud'
 import { useDebouncedRef, throttleSubmit } from '@/composables/useRateLimit'
 import { ISLAND_OPTIONS } from '@/data/islands'
@@ -1790,12 +1791,9 @@ async function makeShareLink(e) {
     }
     if (!rec?.token) throw new Error('生成失败，请稍后再试')
     shareLink.value = shareLinkOf(rec.token)
-    try {
-      await navigator.clipboard.writeText(shareLink.value)
-      tip('链接已复制，发给朋友就能打开')
-    } catch {
-      tip('链接已生成，点弹层里的按钮复制')
-    }
+    // http 下 navigator.clipboard 不存在，必须走 copyText 的 execCommand 兜底
+    if (await copyText(shareLink.value)) tip('链接已复制，发给朋友就能打开')
+    else tip('链接已生成，点下面的按钮复制')
   } catch (err) {
     tip(err?.message || '生成分享链接失败')
   } finally {
@@ -1804,12 +1802,8 @@ async function makeShareLink(e) {
 }
 
 async function copyShareLink() {
-  try {
-    await navigator.clipboard.writeText(shareLink.value)
-    tip('链接已复制')
-  } catch {
-    tip('复制失败，请点输入框全选手动复制')
-  }
+  if (await copyText(shareLink.value)) tip('链接已复制')
+  else tip('复制失败，请长按输入框里的链接手动复制')
 }
 
 // AI 产物是 /uploads/... 的相对路径，dev 下前端(5173)与后端(8787)不同源，
@@ -2118,6 +2112,21 @@ async function doRemove() {
   display: grid;
   place-items: center;
   container-type: size;
+}
+
+/* ★ 2026-11-15 用户反馈「页面四周有一圈阴影」：
+   画面是按 1452:941 烘焙的整页海报，屏幕比例不等于 1.54 时 contain 必然留白，
+   露出来的 .index-main 底色就成了一个"画框",看着像阴影。
+   这里在底下垫一层同一张图的 cover + 轻模糊 + 提亮，留白处变成画面的自然延续，
+   视觉上等于铺满整页 —— 关键是主图仍然 contain，所有按百分比定位的卡片/按钮
+   坐标一个都不用改（真用 cover 会把顶部的「记忆库」标题和第三行卡片裁掉）。 */
+.memory-figure::before {
+  content: '';
+  position: absolute;
+  inset: -70px;
+  background: #eddcc8 url('../assets/opt/memoryBackground-sm.webp') center / cover no-repeat;
+  filter: blur(24px) brightness(1.16) saturate(1.06);
+  pointer-events: none;
 }
 
 /* 与 contain 绘制出的图片区域同比例同位置, 控件按图片坐标定位 */
@@ -4308,6 +4317,11 @@ async function doRemove() {
     display: block;
     height: auto;
     min-height: 100%;
+  }
+
+  /* 手机端是竖屏流式排版，没有"整页海报留白"的问题，桌面那层延伸底色反而是多余的 */
+  .memory-figure::before {
+    display: none;
   }
 
   /* 标题条跟着收紧：128px 在竖屏上等于一整屏的 1/6，只用来放两个字太亏 */

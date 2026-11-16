@@ -1460,6 +1460,12 @@ onUnmounted(() => {
   height: 100%;
   border: 0;
   display: block;
+  /* ★ 2026-11-15 用户反馈「3D 小岛太暗，想亮一点」：
+     Cocos 场景里烘焙的太阳光/环境光偏冷偏低，改场景要重跑一遍 Cocos 构建、
+     再同步 7 处产物副本，成本高风险大。这里直接在画面上叠一层滤镜提亮 ——
+     只改渲染结果，不碰任何逻辑，也不影响 iframe 里发出的坐标/点击（滤镜不改布局）。
+     觉得太亮或不够亮就调 brightness（1.0 原样 / 1.3 明显亮），饱和度和对比度同理。 */
+  filter: brightness(1.14) saturate(1.06) contrast(1.02);
 }
 /* 启动中：右侧列表已在模板里用 v-if 排除了；3D 猫在 Cocos 画布里，
    不再有 2D 宠物需要隐藏（原来的 .pet-root 规则随 PetCompanion 一起删掉了）。 */

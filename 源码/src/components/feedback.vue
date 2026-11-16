@@ -248,12 +248,14 @@ onMounted(() => { loadHistory() })
 .feedback-figure::before {
   content: '';
   position: absolute;
-  inset: -40px;
+  inset: -70px;
   background-image: var(--fb-bg, none);
   background-size: cover;
   background-position: center;
-  filter: blur(26px) saturate(1.06);
-  opacity: 0.96;
+  /* ★ 2026-11-15：原来只有 blur，放大后的暗部在四周形成一圈"阴影"；
+     把模糊加大、同时提亮，留白处才会和主图同亮度，看起来就是图铺满了。 */
+  filter: blur(30px) brightness(1.16) saturate(1.05);
+  opacity: 0.98;
   pointer-events: none;
 }
 

@@ -6,6 +6,11 @@
 // 云调用只在**已发布的 HTTPS 域名**上生效，localhost / 预览地址会被服务端按 Origin 拒绝。
 import { createWorkBuddyCloud } from '@tencent-ai/workbuddy-cloud-sdk'
 
+// ★ 这个常量是 WorkBuddy 云服务的数据面入口，**不是**本站的访问地址，别拿它当"在线演示地址"改：
+//   它同时被下方 cloudHosted 用来判断"当前是不是跑在云托管域名上"。
+//   改成自建服务器地址会让 cloudHosted 变成 true，于是微信扫码登录 / 云备份 / 平台公告
+//   这些云托管专属入口全部显示出来，点了必然 403（云服务按 Origin 校验发布域名）。
+//   云托管站已于 2026-11-14 下线，这里保留原值只为让 SDK 初始化和判定逻辑维持原状。
 export const CLOUD_ENDPOINT = 'https://timepick-memory.app.workbuddy.host'
 export const CLOUD_PUBLISHABLE_KEY =
   'wbpk_vB3xE6OSbYoIOGOQrfWV72_hS5iyCvWNwJFsW91TgmDKxpJxEugv1sk'
