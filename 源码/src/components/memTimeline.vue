@@ -464,6 +464,8 @@ watch(
    ★ 高亮 #FBB043（rgb(251,176,67)）/ 连线白色，与竖排、小岛翻页按钮同色。 */
 .mtl-h {
   --mth-th: 54px; /* 小图直径：横线高度、行高、箭头对齐都跟着它走 */
+  --mth-node: 150px; /* 节点宽 */
+  --mth-gap: 40px; /* 节点间距：金色线段长度 = 这两个之和（圆心到相邻圆心） */
   --mth-pad: 2px;
   --mth-on: rgb(251, 176, 67);
   --mth-line: rgba(255, 255, 255, 0.78);
@@ -592,16 +594,20 @@ watch(
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 40px;
+  gap: var(--mth-gap);
   margin: 0;
   padding: var(--mth-pad) 4px 0;
   list-style: none;
+  /* 金色线段会从首/末节点往外各伸半个圆心距，超出内容区：
+     往左溢出浏览器不计入滚动区（自动被裁），往右会被算进去，横向滚动条就冒出来了。
+     clip 把两头的溢出直接裁掉，又不建立滚动容器。 */
+  overflow-x: clip;
 }
 .mth-line {
   position: absolute;
   left: 10px;
   right: 10px;
-  top: calc(var(--mth-pad) + var(--mth-th) / 2);
+  top: calc(var(--mth-pad) + var(--mth-th) / 2 - 1px);
   height: 2px;
   background: linear-gradient(
     90deg,
@@ -616,7 +622,7 @@ watch(
 
 .mth-node {
   flex: 0 0 auto;
-  width: 150px;
+  width: var(--mth-node);
 }
 .mth-btn {
   position: relative;
@@ -668,7 +674,7 @@ watch(
   background: rgba(255, 255, 255, 0.85);
 }
 .mth-name {
-  max-width: 150px;
+  max-width: var(--mth-node);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -694,22 +700,26 @@ watch(
    （用户 2026-11-16 反馈"悬停高亮没做出来"）。
    ★ 横线 .mth-line 是 .mth-list 的绝对定位子元素、在 li 之前绘制，
      所以节点里的 ::before 天然盖在它上面，不用再抬 z-index。 */
+/* 金色线段 = 本节点圆心 → 前一个节点圆心 / 后一个节点圆心，
+   也就是长度正好一个"圆心距"（节点宽 + 间距）、以圆心居中。
+   用户要的是"连到前后节点的那段线也亮起来"，不是只在圆周围亮一小圈。 */
 .mth-btn::before {
   content: '';
   position: absolute;
   top: calc(var(--mth-th) / 2 - 1.5px);
   left: 50%;
-  width: calc(var(--mth-th) + 104px);
+  width: calc((var(--mth-node) + var(--mth-gap)) * 2 - var(--mth-th));
   height: 3px;
-  margin-left: calc((var(--mth-th) + 104px) / -2);
+  margin-left: calc(((var(--mth-node) + var(--mth-gap)) * 2 - var(--mth-th)) / -2);
   border-radius: 3px;
   background: linear-gradient(
     90deg,
-    rgba(251, 176, 67, 0) 0%,
-    rgba(255, 206, 120, 0.5) 18%,
-    rgba(255, 233, 182, 0.98) 50%,
-    rgba(255, 206, 120, 0.5) 82%,
-    rgba(251, 176, 67, 0) 100%
+    rgba(255, 214, 140, 0) 0%,
+    rgba(255, 224, 164, 0.86) 7%,
+    rgba(255, 243, 208, 1) 22%,
+    rgba(255, 243, 208, 1) 78%,
+    rgba(255, 224, 164, 0.86) 93%,
+    rgba(255, 214, 140, 0) 100%
   );
   box-shadow: 0 0 12px rgba(251, 176, 67, 0.55);
   opacity: 0;
@@ -718,6 +728,46 @@ watch(
 }
 
 /* 圆内金色光晕：中心透、边缘浓，像一圈小灯把圆点亮；图片/图标压在它上面 */
+/* 首/末节点没有"前一个""后一个"，金色只往有邻居的一侧伸：
+   另一半本来会顶到卡片内边距被硬切一刀，看着像渲染出错。
+   ★ 用 :first-of-type 不用 :first-child —— 列表第一个子元素是那条白线 <span>。 */
+.mth-node:first-of-type .mth-btn::before {
+  left: 50%;
+  right: auto;
+  margin-left: 0;
+  width: calc(var(--mth-node) + var(--mth-gap) - var(--mth-th) / 2);
+}
+.mth-node:last-of-type .mth-btn::before {
+  left: auto;
+  right: 50%;
+  margin-left: 0;
+  width: calc(var(--mth-node) + var(--mth-gap) - var(--mth-th) / 2);
+}
+/* 只有一条记忆时左右都没有邻居，就别画线了，只留圆的高亮 */
+.mth-node:only-of-type .mth-btn::before {
+  display: none;
+}
+
+/* 首/末节点没有"前一个""后一个"，金色只往有邻居的一侧伸：
+   另一半本来会顶到卡片内边距被硬切一刀，看着像渲染出错。
+   ★ 用 :first-of-type 不用 :first-child —— 列表第一个子元素是那条白线 <span>。 */
+.mth-node:first-of-type .mth-btn::before {
+  left: 50%;
+  right: auto;
+  margin-left: 0;
+  width: calc(var(--mth-node) + var(--mth-gap) - var(--mth-th) / 2);
+}
+.mth-node:last-of-type .mth-btn::before {
+  left: auto;
+  right: 50%;
+  margin-left: 0;
+  width: calc(var(--mth-node) + var(--mth-gap) - var(--mth-th) / 2);
+}
+/* 只有一条记忆时左右都没有邻居，就别画线了，只留圆的高亮 */
+.mth-node:only-of-type .mth-btn::before {
+  display: none;
+}
+
 .mth-thumb::after {
   content: '';
   position: absolute;
@@ -837,6 +887,8 @@ watch(
 @media (max-height: 800px) {
   .mtl-h {
     --mth-th: 44px;
+    --mth-node: 118px;
+    --mth-gap: 28px;
     padding: 8px 16px 11px;
     border-radius: 18px;
   }
@@ -848,14 +900,7 @@ watch(
     height: 24px;
     font-size: 11.5px;
   }
-  .mth-list {
-    gap: 28px;
-  }
-  .mth-node {
-    width: 118px;
-  }
   .mth-name {
-    max-width: 118px;
     font-size: 12.5px;
   }
   .mth-date {
@@ -897,6 +942,8 @@ watch(
   /* 横排：小图缩到 40px，日期整行去掉（手机上名字+日期两行会占掉半个底部条） */
   .mtl-h {
     --mth-th: 40px;
+    --mth-node: 84px;
+    --mth-gap: 18px;
     width: 100%;
     max-width: 100%;
     padding: 8px 12px 11px;
@@ -915,14 +962,7 @@ watch(
     height: 28px;
     font-size: 18px;
   }
-  .mth-list {
-    gap: 18px;
-  }
-  .mth-node {
-    width: 84px;
-  }
   .mth-name {
-    max-width: 84px;
     font-size: 11.5px;
   }
   .mth-date {
