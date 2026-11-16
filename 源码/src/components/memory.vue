@@ -676,7 +676,7 @@
               <input
                 v-model="aiAssist.image"
                 type="checkbox"
-                :disabled="aiBusy"
+                :disabled="aiBusy || !aiPerm.image"
                 @change="onAiOptChange('image')"
               />
               <span class="ai-opt-text">
@@ -691,7 +691,7 @@
               <input
                 v-model="aiAssist.video"
                 type="checkbox"
-                :disabled="aiBusy"
+                :disabled="aiBusy || !aiPerm.video"
                 @change="onAiOptChange('video')"
               />
               <span class="ai-opt-text">
@@ -706,7 +706,7 @@
               <input
                 v-model="aiAssist.polish"
                 type="checkbox"
-                :disabled="aiBusy"
+                :disabled="aiBusy || !aiPerm.reply"
                 @change="onAiOptChange('polish')"
               />
               <span class="ai-opt-text">
@@ -783,7 +783,7 @@ import { cloudApi } from '@/api/cloud'
 import { useDebouncedRef, throttleSubmit } from '@/composables/useRateLimit'
 import { ISLAND_OPTIONS } from '@/data/islands'
 import { generateMemoryCover, getLastCoverError, isPermissionDenied } from '@/api/aiCover'
-import { chatWithDeepSeek, refreshAiStatus, aiPermInfo } from '@/api/deepseek'
+import { chatWithDeepSeek, refreshAiStatus, aiPermInfo, imageReady } from '@/api/deepseek'
 import { useVoiceInput, VOICE_MAX_SEC } from '@/composables/useVoiceInput'
 import IdleThought from './idleThought.vue'
 
@@ -1438,6 +1438,13 @@ const aiLead = computed(() => {
   const a = aiAssist.value
   if (!a) return ''
   const name = a.entry?.title || '这条记忆'
+  // 三项都没开通时勾不动，先说清楚原因，别让用户以为界面坏了
+  const none = !aiPerm.value.image && !aiPerm.value.video && !aiPerm.value.reply
+  if (none) {
+    return a.mode === 'edit'
+      ? `「${name}」的修改已保存。AI 能力还没有对你这台设备开通，下面的选项暂时都点不动。`
+      : `「${name}」已经放进房间了。AI 能力还没有对你这台设备开通，下面的选项暂时都点不动。`
+  }
   return a.mode === 'edit'
     ? `「${name}」的修改已保存。以下 AI 能力可以多选，也可以都不选。`
     : `「${name}」已经放进房间了。以下 AI 能力可以多选，也可以都不选。`
@@ -2027,9 +2034,18 @@ async function save() {
     // 有任一 AI 权限时不自动画封面（交给弹窗里的勾选决定）；
     // 一项权限都没有时仍按老习惯后台出封面，弹窗照样弹（只作告知）。
     const anyPerm = aiPerm.value.image || aiPerm.value.video || aiPerm.value.reply
+    // ★ 2026-11-16 用户反馈：管理员没开 AI 权限时，保存后后台仍会试着画封面，
+    //   后端必然回「AI 生图功能已被管理员限制」，前端随即在右上角弹一条
+    //   「封面生成失败，可稍后在记忆详情重新生成」—— 一条纯噪音的假警报。
+    //   现在只在"不可能是权限失败"时才自动生成：
+    //     · 有任意 AI 权限 → 交给下面的勾选弹窗，本来就不自动画
+    //     · 一项权限都没有，且服务端根本没配生图（imageReady=false）
+    //       → generateMemoryCover 会走本地 Canvas 配色封面（离线可用），照画
+    //     · 一项权限都没有，但服务端配了生图、只是对这个人关着 → 不画（画了必失败）
+    const autoCover = !anyPerm && !imageReady()
     let saved = null
     if (isNew) {
-      saved = await store.addEntry(data, { cover: !anyPerm })
+      saved = await store.addEntry(data, { cover: autoCover })
     } else {
       // ★ 修改后保存也弹 AI 弹窗（用户要求，替换原来只 tip「修改已保存」）：
       //   updateEntry 会把更新后的条目返回，直接拿它当弹窗目标 —— 润色/出图
@@ -2060,7 +2076,11 @@ watch(
   (e) => {
     if (!e) return
     const name = e.title.length > 12 ? `${e.title.slice(0, 12)}…` : e.title
-    if (!e.ok) tip(`「${name}」封面生成失败, 可稍后在记忆详情重新生成`)
+    // 权限类失败不提示：管理员没开生图 / 未登录时这条失败是"预期内"的，
+    // 弹「生成失败」只会让用户以为系统坏了（2026-11-16 用户明确要求去掉）
+    if (!e.ok) {
+      if (!isPermissionDenied(e.error)) tip(`「${name}」封面生成失败, 可稍后在记忆详情重新生成`)
+    }
     else if (e.error) tip(`「${name}」已用备用封面, 可在记忆详情重新生成`)
     else tip(`「${name}」的封面画好啦`)
   },
@@ -3767,6 +3787,12 @@ async function doRemove() {
 .ai-opt.off {
   background: #f3efe9;
   border-color: #e6ddd2;
+  /* 没权限时整条变成"不可点"的样子：勾选框已经 disabled，鼠标/手指也不该显示可点 */
+  cursor: not-allowed;
+}
+.ai-opt.off .ai-opt-text b,
+.ai-opt.off .ai-opt-text i {
+  color: #a39a90;
 }
 .ai-opt-off {
   margin-top: 2px;

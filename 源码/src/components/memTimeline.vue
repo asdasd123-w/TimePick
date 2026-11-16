@@ -20,7 +20,7 @@
   <div v-if="layout === 'h'" class="mtl mtl-h" :class="'mtl-' + kind">
     <div class="mth-head">
       <span class="mtl-title">{{ label }}</span>
-      <span class="mtl-count">{{ nodes.length }}</span>
+      <span class="mtl-count mth-count">{{ nodes.length }}</span>
     </div>
 
     <!-- 箭头跟小图排在同一行的最右端（垂直居中于圆心）。
@@ -53,7 +53,7 @@
           </li>
         </ul>
       </div>
-      <span class="mth-arrows">
+      <span class="mth-arrows" :class="{ idle: !canLeft && !canRight }">
         <button type="button" class="mth-arrow" aria-label="向左" :disabled="!canLeft" @click="scrollH(-1)">‹</button>
         <button type="button" class="mth-arrow" aria-label="向右" :disabled="!canRight" @click="scrollH(1)">›</button>
       </span>
@@ -425,9 +425,6 @@ watch(
 .mtl-room .mtl-head {
   color: rgba(255, 236, 214, 0.72);
 }
-.mtl-room .mtl-count {
-  background: rgba(255, 226, 190, 0.18);
-}
 .mtl-room .mtl-line {
   background: linear-gradient(
     180deg,
@@ -457,46 +454,81 @@ watch(
 }
 
 /* ================= 横排（3D 房间页底部） =================
-   配色按用户给的三色定：
-     高亮 #FBB043 = rgb(251,176,67)、连线 #FEECCD = rgb(254,236,205)、
-     发光/阴影全部由高亮色带透明度派生（暖光压在暖色房间里，用纯黑阴影会发灰）。
-   小图就是时间线上的"点"：36px 圆，选中那一颗描边 + 外发光 + 放大 1.08。 */
-.mtl-h {
-  --mth-th: 46px; /* 小图直径，横线高度、行高都跟着它走 */
-  --mth-pad: 2px; /* 列表上内边距 */
-  --mth-on: rgb(251, 176, 67);
-  --mth-line: rgb(254, 236, 205);
+   2026-11-16 按用户给的参考图重做：整条做成一块"磨砂玻璃"——
+   半透明白 + 顶部内高光 + 细白边 + 柔和外阴影；左上标题、右上圆形角标，
+   一条白线串起 54px 的圆形小图，图下是名字和日期，当前项套一圈金色光晕。
 
-  /* 宽度跟着内容走（最多撑满）：5 条时条子只有 ~450px，右侧不会留一大片空面板；
-     条数多到放不下时 max-width 兜住，交给 .mth-scroll 横滚。 */
+   ★ 不用 backdrop-filter：这一层压在 <iframe> 的 Cocos 画布上，
+     backdrop-filter 只对同一文档里后续绘制的内容生效，对 iframe 内的画布无效，
+     加了只有合成开销、看不到模糊。玻璃感靠多层半透明白渐变伪装出来。
+   ★ 高亮 #FBB043（rgb(251,176,67)）/ 连线白色，与竖排、小岛翻页按钮同色。 */
+.mtl-h {
+  --mth-th: 54px; /* 小图直径：横线高度、行高、箭头对齐都跟着它走 */
+  --mth-pad: 2px;
+  --mth-on: rgb(251, 176, 67);
+  --mth-line: rgba(255, 255, 255, 0.78);
+
+  /* 宽度跟着内容走（最多撑满）：节点少时右侧不会留一大片空玻璃；
+     多了 max-width 兜住，交给 .mth-scroll 横滚。 */
   width: fit-content;
   max-width: 100%;
-  padding: 9px 12px 8px;
-  border-radius: 16px;
-  /* 底下那层已经是 .room-gallery 的深色渐隐，这里再压太实就成一块黑板了 */
-  /* background: linear-gradient(180deg, rgba(46, 36, 30, 0.42), rgba(46, 36, 30, 0.2)); */
-  border: 1px solid rgba(255, 226, 190, 0.2);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
+  padding: 10px 24px 14px;
+  border-radius: 22px;
+  /* 亮度取"能看出是层玻璃、又不至于把 3D 画面糊住"的中间值：
+     再淡认不出是卡片，再浓就成一块白塑料 */
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.36) 0%,
+    rgba(255, 255, 255, 0.2) 52%,
+    rgba(255, 255, 255, 0.29) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68), inset 0 -16px 32px rgba(255, 255, 255, 0.1),
+    0 16px 38px rgba(46, 30, 18, 0.26);
 }
+
 .mth-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 0 2px 6px;
-  font-size: 11.5px;
-  letter-spacing: 0.08em;
-  color: rgba(255, 236, 214, 0.86);
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0 2px;
+  color: #fff;
 }
-.mth-head .mtl-count {
-  background: rgba(255, 226, 190, 0.18);
+.mth-title {
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 8px rgba(52, 32, 14, 0.34);
+}
+/* 右上角圆形角标：参考图里是个半透明白圆，比小胶囊更像"数量指示" */
+.mth-count {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
-/* 一行 = 滚动区 + 右端箭头。箭头不再放标题行：标题行只有一行字那么高，
-   箭头跟小图对不齐，看着像"挂"在上面。 */
+/* 一行 = 滚动区 + 右端箭头。箭头跟小图圆心对齐，不跟标题行。 */
 .mth-body {
   display: flex;
   align-items: flex-start;
-  gap: 3px;
+  gap: 4px;
+}
+/* 节点没溢出时箭头不显示也不占位：留着的话卡片右边永远比左边多 53px */
+.mth-arrows.idle {
+  display: none;
 }
 .mth-arrows {
   flex: 0 0 auto;
@@ -518,7 +550,7 @@ watch(
   border: 0;
   border-radius: 8px;
   background: none;
-  color: var(--mth-line);
+  color: rgba(255, 255, 255, 0.78);
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
@@ -533,7 +565,7 @@ watch(
   outline-offset: -2px;
 }
 .mth-arrow:disabled {
-  opacity: 0.26;
+  opacity: 0.24;
   cursor: default;
 }
 
@@ -560,9 +592,9 @@ watch(
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 20px;
+  gap: 40px;
   margin: 0;
-  padding: var(--mth-pad) 8px 0;
+  padding: var(--mth-pad) 4px 0;
   list-style: none;
 }
 .mth-line {
@@ -570,22 +602,24 @@ watch(
   left: 10px;
   right: 10px;
   top: calc(var(--mth-pad) + var(--mth-th) / 2);
-  height: 1.5px;
+  height: 2px;
   background: linear-gradient(
     90deg,
-    rgba(254, 236, 205, 0) 0%,
-    var(--mth-line) 6%,
-    var(--mth-line) 94%,
-    rgba(254, 236, 205, 0) 100%
+    rgba(255, 255, 255, 0) 0%,
+    var(--mth-line) 5%,
+    var(--mth-line) 95%,
+    rgba(255, 255, 255, 0) 100%
   );
+  box-shadow: 0 0 7px rgba(255, 255, 255, 0.45);
   pointer-events: none;
 }
 
 .mth-node {
   flex: 0 0 auto;
-  width: 90px;
+  width: 150px;
 }
 .mth-btn {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -605,12 +639,12 @@ watch(
   place-items: center;
   width: var(--mth-th);
   height: var(--mth-th);
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.66);
   border-radius: 50%;
-  border: 1.5px solid rgba(254, 236, 205, 0.55);
-  background: rgba(255, 232, 208, 0.16);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 4px 14px rgba(38, 24, 14, 0.24);
   transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1), border-color 0.22s ease,
     box-shadow 0.22s ease;
 }
@@ -621,77 +655,122 @@ watch(
   object-fit: cover;
 }
 .mth-ph {
-  font-size: 20px;
+  font-size: 24px;
   font-style: normal;
   line-height: 1;
+  /* 圆形底色是半透明白，emoji 直接压上去会糊，给一点投影拉出轮廓 */
+  filter: drop-shadow(0 1px 2px rgba(60, 40, 20, 0.36));
 }
 .mth-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: rgba(254, 236, 205, 0.8);
+  background: rgba(255, 255, 255, 0.85);
 }
 .mth-name {
-  max-width: 90px;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: rgba(255, 242, 228, 0.82);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-  transition: color 0.2s ease, font-size 0.2s ease;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  /* 底下的 3D 画面什么颜色都有（草地、天空、花），白光靠"暗色描边+柔光"才立得住 */
+  text-shadow: 0 1px 2px rgba(38, 22, 8, 0.55), 0 0 12px rgba(38, 22, 8, 0.3);
+  transition: color 0.2s ease;
 }
 .mth-date {
-  font-size: 11px;
+  font-size: 13px;
   font-style: normal;
-  color: rgba(255, 238, 220, 0.46);
+  color: rgba(255, 255, 255, 0.94);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 2px rgba(38, 22, 8, 0.5);
 }
 
 .mth-btn:hover .mth-thumb {
-  border-color: rgba(251, 176, 67, 0.85);
-  transform: scale(1.06);
+  border-color: rgba(255, 236, 205, 0.95);
+  transform: scale(1.05);
 }
 .mth-btn:hover .mth-name {
-  color: #fff6e8;
+  color: #fff;
 }
 .mth-btn:focus-visible {
   outline: 2px solid rgba(251, 176, 67, 0.9);
-  outline-offset: 3px;
-  border-radius: 10px;
+  outline-offset: 4px;
+  border-radius: 12px;
 }
 
-/* ---- 当前项 ---- */
+/* ---- 当前项：金环 + 内描边 + 外发光 + 一圈缓慢扩散的光环（参考图第一个节点）---- */
 .mth-node.on .mth-thumb {
-  border-color: var(--mth-on);
-  transform: scale(1.1);
-  /* 内环 + 一圈淡环 + 外发光：单靠 1.5px 描边在暖色房间上认不出来 */
-  box-shadow: inset 0 0 0 1px var(--mth-on), 0 0 0 4px rgba(251, 176, 67, 0.28),
-    0 0 22px 4px rgba(251, 176, 67, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 236, 198, 0.95);
+  transform: scale(1.04);
+  /* 内环 + 一圈淡环 + 大范围暖光：单靠 1.5px 描边在半透明玻璃上认不出来 */
+  box-shadow: inset 0 0 0 2px var(--mth-on), 0 0 0 5px rgba(251, 176, 67, 0.24),
+    0 0 26px 7px rgba(251, 176, 67, 0.6), 0 4px 16px rgba(52, 32, 10, 0.28);
+}
+.mth-node.on .mth-btn::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: calc(var(--mth-th) + 10px);
+  height: calc(var(--mth-th) + 10px);
+  margin-left: calc((var(--mth-th) + 10px) / -2);
+  border: 1.5px solid rgba(255, 214, 140, 0.85);
+  border-radius: 50%;
+  animation: mth-pulse 2.8s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes mth-pulse {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.36);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.36);
+    opacity: 0;
+  }
 }
 .mth-node.on .mth-name {
-  color: #fff6e8;
-  font-weight: 700;
-  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
 }
 .mth-node.on .mth-date {
-  color: rgba(251, 176, 67, 0.92);
+  color: rgba(255, 240, 210, 0.92);
 }
 
 /* 矮屏（720p 笔记本 / 分屏）：整条往回收一档，给 3D 画面多留些地方。
    ★ 这条只压横排；竖排的高度本来就由页面自己卡（岛屿页 52vh）。 */
 @media (max-height: 800px) {
   .mtl-h {
-    --mth-th: 38px;
-    padding: 7px 10px 6px;
+    --mth-th: 44px;
+    padding: 8px 16px 11px;
+    border-radius: 18px;
   }
-  .mth-name {
+  .mth-title {
+    font-size: 14.5px;
+  }
+  .mth-count {
+    width: 24px;
+    height: 24px;
     font-size: 11.5px;
   }
+  .mth-list {
+    gap: 28px;
+  }
+  .mth-node {
+    width: 118px;
+  }
+  .mth-name {
+    max-width: 118px;
+    font-size: 12.5px;
+  }
   .mth-date {
-    font-size: 10.5px;
+    font-size: 11px;
   }
 }
 
@@ -726,16 +805,21 @@ watch(
     display: none;
   }
 
-  /* 横排：小图缩到 36px，日期整行去掉（手机上 4 行字会占掉半个底部条） */
+  /* 横排：小图缩到 40px，日期整行去掉（手机上名字+日期两行会占掉半个底部条） */
   .mtl-h {
-    --mth-th: 36px;
+    --mth-th: 40px;
     width: 100%;
     max-width: 100%;
-    padding: 6px 8px 5px;
-    border-radius: 12px;
+    padding: 8px 12px 11px;
+    border-radius: 16px;
   }
-  .mth-head {
-    font-size: 10.5px;
+  .mth-title {
+    font-size: 13.5px;
+  }
+  .mth-count {
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
   }
   .mth-arrow {
     width: 28px;
@@ -743,14 +827,14 @@ watch(
     font-size: 18px;
   }
   .mth-list {
-    gap: 10px;
+    gap: 18px;
   }
   .mth-node {
-    width: 70px;
+    width: 84px;
   }
   .mth-name {
-    max-width: 70px;
-    font-size: 11px;
+    max-width: 84px;
+    font-size: 11.5px;
   }
   .mth-date {
     display: none;
@@ -759,6 +843,10 @@ watch(
 
 @media (prefers-reduced-motion: reduce) {
   .mtl-node.on .mtl-dotbox::after {
+    animation: none;
+    opacity: 0;
+  }
+  .mth-node.on .mth-btn::after {
     animation: none;
     opacity: 0;
   }
