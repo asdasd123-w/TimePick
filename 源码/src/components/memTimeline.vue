@@ -658,8 +658,8 @@ watch(
   font-size: 24px;
   font-style: normal;
   line-height: 1;
-  /* 圆形底色是半透明白，emoji 直接压上去会糊，给一点投影拉出轮廓 */
-  filter: drop-shadow(0 1px 2px rgba(60, 40, 20, 0.36));
+  /* 圆底是半透明白（高亮时还变金），emoji 直接压上去会糊，给一点投影拉出轮廓 */
+  filter: drop-shadow(0 1px 2px rgba(60, 40, 20, 0.42));
 }
 .mth-dot {
   width: 9px;
@@ -687,13 +687,101 @@ watch(
   text-shadow: 0 1px 2px rgba(38, 22, 8, 0.5);
 }
 
-.mth-btn:hover .mth-thumb {
-  border-color: rgba(255, 236, 205, 0.95);
-  transform: scale(1.05);
+/* ---- 金色高亮（参考图第一个节点）------------------------------------
+   悬停 / 键盘聚焦 / 当前项 共用一套：金环 + 暖色外发光 + 圆内金色光晕
+   + 横线上压一段金色渐变。
+   以前 hover 只是放大 1.05 再换一下边框色，压在浅色草地上根本看不出变化
+   （用户 2026-11-16 反馈"悬停高亮没做出来"）。
+   ★ 横线 .mth-line 是 .mth-list 的绝对定位子元素、在 li 之前绘制，
+     所以节点里的 ::before 天然盖在它上面，不用再抬 z-index。 */
+.mth-btn::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--mth-th) / 2 - 1.5px);
+  left: 50%;
+  width: calc(var(--mth-th) + 104px);
+  height: 3px;
+  margin-left: calc((var(--mth-th) + 104px) / -2);
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(251, 176, 67, 0) 0%,
+    rgba(255, 206, 120, 0.5) 18%,
+    rgba(255, 233, 182, 0.98) 50%,
+    rgba(255, 206, 120, 0.5) 82%,
+    rgba(251, 176, 67, 0) 100%
+  );
+  box-shadow: 0 0 12px rgba(251, 176, 67, 0.55);
+  opacity: 0;
+  transition: opacity 0.24s ease;
+  pointer-events: none;
 }
-.mth-btn:hover .mth-name {
-  color: #fff;
+
+/* 圆内金色光晕：中心透、边缘浓，像一圈小灯把圆点亮；图片/图标压在它上面 */
+.mth-thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 48%,
+    rgba(255, 244, 214, 0.16) 0%,
+    rgba(255, 214, 140, 0.3) 54%,
+    rgba(251, 176, 67, 0.62) 84%,
+    rgba(255, 208, 132, 0.86) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.24s ease;
+  pointer-events: none;
 }
+.mth-thumb img,
+.mth-ph,
+.mth-dot {
+  position: relative;
+  z-index: 1;
+}
+
+.mth-btn:focus-visible::before,
+.mth-node.on .mth-btn::before {
+  opacity: 1;
+}
+.mth-btn:focus-visible .mth-thumb::after,
+.mth-node.on .mth-thumb::after {
+  opacity: 1;
+}
+.mth-btn:focus-visible .mth-thumb {
+  border-color: #ffe9bc;
+  transform: scale(1.04);
+  /* 圆底本身也换成金色：只描金边的话中心仍是白的，看着像"选中框"而不是"发光体"。
+     有封面时 img 会盖住这一层，靠 ::after 的金色叠色补上。 */
+  background: radial-gradient(circle at 50% 38%, #fff6dc 0%, #ffdd97 48%, #f7a93c 100%);
+  box-shadow: inset 0 0 0 2px var(--mth-on), 0 0 0 5px rgba(251, 176, 67, 0.24),
+    0 0 26px 7px rgba(251, 176, 67, 0.6), 0 4px 16px rgba(52, 32, 10, 0.28);
+}
+
+/* 鼠标悬停：和当前项同一套金色，只是外发光弱一档、没有扩散光环，
+   这样"已经选中的"和"手正指着"能分出来。
+   限定 (hover: hover)：触屏上 :hover 会粘在最后点过的节点上，一直亮着。 */
+@media (hover: hover) {
+  .mth-btn:hover::before {
+    opacity: 1;
+  }
+  .mth-btn:hover .mth-thumb::after {
+    opacity: 1;
+  }
+  .mth-btn:hover .mth-thumb {
+    border-color: #ffeecd;
+    transform: scale(1.06);
+    background: radial-gradient(circle at 50% 38%, #fff8e4 0%, #ffe2a4 48%, #f9ae42 100%);
+    box-shadow: inset 0 0 0 2px var(--mth-on), 0 0 0 4px rgba(251, 176, 67, 0.2),
+      0 0 22px 6px rgba(251, 176, 67, 0.52), 0 4px 16px rgba(52, 32, 10, 0.28);
+  }
+  .mth-btn:hover .mth-name {
+    color: #fffdf6;
+    text-shadow: 0 1px 2px rgba(38, 22, 8, 0.6), 0 0 14px rgba(251, 176, 67, 0.75);
+  }
+}
+
 .mth-btn:focus-visible {
   outline: 2px solid rgba(251, 176, 67, 0.9);
   outline-offset: 4px;
@@ -702,8 +790,9 @@ watch(
 
 /* ---- 当前项：金环 + 内描边 + 外发光 + 一圈缓慢扩散的光环（参考图第一个节点）---- */
 .mth-node.on .mth-thumb {
-  border-color: rgba(255, 236, 198, 0.95);
+  border-color: #ffe9bc;
   transform: scale(1.04);
+  background: radial-gradient(circle at 50% 38%, #fff6dc 0%, #ffdd97 48%, #f7a93c 100%);
   /* 内环 + 一圈淡环 + 大范围暖光：单靠 1.5px 描边在半透明玻璃上认不出来 */
   box-shadow: inset 0 0 0 2px var(--mth-on), 0 0 0 5px rgba(251, 176, 67, 0.24),
     0 0 26px 7px rgba(251, 176, 67, 0.6), 0 4px 16px rgba(52, 32, 10, 0.28);
