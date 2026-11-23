@@ -389,7 +389,10 @@
                 <div class="ai-key-meta">
                   <div class="ai-key-title">
                     <b>{{ k.label }}</b>
-                    <i class="ai-key-state" :class="k.set ? 'ok' : 'none'">
+                    <i v-if="k.invalid" class="ai-key-state bad">
+                      后台存的是无效内容（含中文/空格），已忽略
+                    </i>
+                    <i v-else class="ai-key-state" :class="k.set ? 'ok' : 'none'">
                       {{ k.set ? (k.source === 'db' ? '后台设置 · 生效中' : '来自 .env · 生效中') : '未配置' }}
                     </i>
                   </div>
@@ -1648,6 +1651,14 @@ onMounted(() => {
 .ai-key-state.none {
   background: #fdecec;
   color: #c97b7b;
+}
+
+/* 库里存的是中文/带空格这些不可能当密钥的内容: 必须显眼地提示重新填写,
+   否则页面上只会显示「未配置」, 管理员看不出自己上次粘错了 */
+.ai-key-state.bad {
+  background: #fdecec;
+  color: #c0504d;
+  font-weight: 600;
 }
 
 .ai-key-desc {

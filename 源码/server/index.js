@@ -94,12 +94,29 @@ function reloadAiKeys() {
   }
 }
 reloadAiKeys()
+// 密钥必须是可打印 ASCII(不含空格)。真实密钥永远是英文/数字/符号;
+// 只要混进一个中文字符, fetch 在**发请求之前**就会抛
+// 「Cannot convert argument to a ByteString ...」这种底层 TypeError —— 它不是业务错误,
+// 前端只能看到「服务器内部错误」, 排查时完全看不出是密钥填错了(线上真踩过:
+// 管理中心把一段中文粘进「万相 · 生视频」的输入框, 生视频/语音/向量检索一起挂)。
+const validAiKey = (v) => {
+  const s = String(v || '').trim()
+  return s && /^[\x21-\x7E]+$/.test(s) ? s : ''
+}
+const warnedBadKey = new Set()
 // 取某个 AI 厂商的密钥: 后台设置优先, 没有再回落 .env
 function aiKey(kind) {
-  const set = (aiKeyCache.get(kind) || '').trim()
+  const raw = String(aiKeyCache.get(kind) || '').trim()
+  const set = validAiKey(raw)
+  if (raw && !set && !warnedBadKey.has(kind)) {
+    warnedBadKey.add(kind)
+    console.warn(
+      `[ai] 后台保存的 ${kind} 密钥含中文/空白等非法字符, 已忽略并回落到 .env; 请到「管理中心 → AI 密钥」重新填写`
+    )
+  }
   if (set) return set
   const meta = AI_KEY_META[kind]
-  return meta ? String(process.env[meta.env] || '').trim() : ''
+  return meta ? validAiKey(process.env[meta.env]) : ''
 }
 // 掩码: 只露前 4 位和后 4 位, 前端永远拿不到完整密钥
 function maskKey(v) {
@@ -489,15 +506,23 @@ function aiAllowed(uid, kind) {
 // 异步三拍: 提交任务 -> 前端轮询 ai/video/sync -> 成功再下载转存本地,
 // 只把 /uploads/videos/xxx 的完整地址写进 memory_item.ai_video(第三方 URL 有效期很短, 必须转存)。
 async function dashscopePost(pathname, body, { async: isAsync = false } = {}) {
-  const res = await fetch(`${DASHSCOPE_BASE_URL}${pathname}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${keyDashscope()}`,
-      'Content-Type': 'application/json',
-      ...(isAsync ? { 'X-DashScope-Async': 'enable' } : {}),
-    },
-    body: JSON.stringify(body || {}),
-  })
+  // 网络层失败(fetch 抛 TypeError)必须转成业务错误: 否则前端只看到「服务器内部错误」,
+  // 分不清是密钥填错、还是出网抖动
+  let res
+  try {
+    res = await fetch(`${DASHSCOPE_BASE_URL}${pathname}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${keyDashscope()}`,
+        'Content-Type': 'application/json',
+        ...(isAsync ? { 'X-DashScope-Async': 'enable' } : {}),
+      },
+      body: JSON.stringify(body || {}),
+      signal: AbortSignal.timeout(60_000),
+    })
+  } catch (e) {
+    throw err(`连接百炼服务失败(${e?.cause?.code || e?.name || '网络异常'}), 请稍后再试`)
+  }
   const json = await res.json().catch(() => ({}))
   if (!res.ok) {
     const msg = json?.message || json?.error?.message || json?.code || `HTTP ${res.status}`
@@ -524,25 +549,68 @@ async function dashscopeFetchTask(taskId) {
   }
 }
 
+// 读出图片的宽高(只支持 png/jpeg/webp, 认不出就返回 null 当作「不校验」)。
+// 百炼万相要求首帧宽高都 ≥ 240 像素, 小图提交会拿到
+// 「Image height or width is too small than 240」这种任务失败, 用户完全看不懂。
+function imageSize(buf) {
+  if (!buf || buf.length < 32) return null
+  // PNG: 8 字节签名 + IHDR, 宽高在 16/20
+  if (buf[0] === 0x89 && buf.toString('latin1', 1, 4) === 'PNG') {
+    return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) }
+  }
+  // WEBP: VP8X 扩展头 / 'VP8 '(有损) 两种最常见
+  if (buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP') {
+    const kind = buf.toString('latin1', 12, 16)
+    if (kind === 'VP8X') return { w: 1 + buf.readUIntLE(24, 3), h: 1 + buf.readUIntLE(27, 3) }
+    if (kind === 'VP8 ') return { w: buf.readUInt16LE(26) & 0x3fff, h: buf.readUInt16LE(28) & 0x3fff }
+    return null
+  }
+  // JPEG: 逐段扫到 SOFn(排除 C4/C8/CC 那几个非 SOF 的段)
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i++; continue }
+      const marker = buf[i + 1]
+      if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { i += 2; continue }
+      const len = buf.readUInt16BE(i + 2)
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) }
+      }
+      if (len < 2) break
+      i += 2 + len
+    }
+  }
+  return null
+}
+// 百炼要求的首帧最小边(像素)
+const I2V_MIN_SIDE = 240
 // 把记忆封面转成百炼能直接吃的 base64 data URL:
 // /uploads 路径读磁盘, http(s) 由服务端代拉; data: 是本地降级假图, 不能拿去生视频
 // 用户上传的照片(优先) / AI 封面(兜底)都可以作为视频生成的首帧参考:
 // 用户传了真实照片就按真照片来, 没传才用 AI 画的封面
 async function userPhotoToDataUrl(itemId) {
-  const row = db
+  const rows = db
     .prepare(
-      "SELECT url FROM memory_media WHERE memory_id = ? AND type = 1 AND url LIKE '/uploads/%' ORDER BY sort ASC LIMIT 1"
+      "SELECT url FROM memory_media WHERE memory_id = ? AND type = 1 AND url LIKE '/uploads/%' ORDER BY sort ASC"
     )
-    .get(itemId)
-  if (!row) return ''
-  // 去 /uploads/ 前缀与查询串, 拼磁盘绝对路径
-  const rel = String(row.url).slice(9).split('?')[0].split('#')[0]
-  const abs = path.join(uploadsDir, rel)
-  if (!fs.existsSync(abs)) return ''
-  const buf = fs.readFileSync(abs)
-  if (buf.length > 8 * 1024 * 1024) return '' // 参考帧过大直接放弃, 防止请求体超限
-  const mime = /.jpe?g$/i.test(rel) ? 'image/jpeg' : /.webp$/i.test(rel) ? 'image/webp' : /.gif$/i.test(rel) ? 'image/gif' : 'image/png'
-  return 'data:' + mime + ';base64,' + buf.toString('base64')
+    .all(itemId)
+  // 按顺序挑第一张「够大」的: 用户先传的可能是个很小的头像/缩略图,
+  // 拿它当首帧百炼会直接拒, 此时换成后面的图或退回 AI 封面
+  let skippedSmall = 0
+  for (const row of rows) {
+    // 去 /uploads/ 前缀与查询串, 拼磁盘绝对路径
+    const rel = String(row.url).slice(9).split('?')[0].split('#')[0]
+    const abs = path.join(uploadsDir, rel)
+    if (!fs.existsSync(abs)) continue
+    let buf
+    try { buf = fs.readFileSync(abs) } catch { continue }
+    if (!buf.length || buf.length > 8 * 1024 * 1024) continue // 参考帧过大直接放弃, 防止请求体超限
+    const size = imageSize(buf)
+    if (size && (size.w < I2V_MIN_SIDE || size.h < I2V_MIN_SIDE)) { skippedSmall++; continue }
+    const mime = /.jpe?g$/i.test(rel) ? 'image/jpeg' : /.webp$/i.test(rel) ? 'image/webp' : /.gif$/i.test(rel) ? 'image/gif' : 'image/png'
+    return { dataUrl: 'data:' + mime + ';base64,' + buf.toString('base64'), skippedSmall }
+  }
+  return { dataUrl: '', skippedSmall }
 }
 
 async function coverToDataUrl(item) {
@@ -555,7 +623,12 @@ async function coverToDataUrl(item) {
   if (cover.startsWith('/uploads/')) {
     // 去掉 ?wm=0 之类的查询串, 否则带着问号去读磁盘必然 ENOENT
     const rel = cover.slice(9).split('?')[0].split('#')[0] // slice(9)=去掉 /uploads/ 前缀; 再去掉 ?wm=0 查询串, 否则带问号读磁盘必然 ENOENT
-    buf = fs.readFileSync(path.join(uploadsDir, rel))
+    const abs = path.join(uploadsDir, rel)
+    // 库里有记录但磁盘没这张图(迁移服务器漏文件/被清理)时必须走业务错误,
+    // 让 readFileSync 的 ENOENT 直接冒出去就变成「服务器内部错误」了
+    if (!fs.existsSync(abs)) throw err('这张封面图在服务器上找不到了, 请重新生成封面后再试')
+    buf = fs.readFileSync(abs)
+    if (buf.length > 8 * 1024 * 1024) throw err('封面图片太大, 请重新生成后再试')
     if (/\.jpe?g$/i.test(rel)) mime = 'image/jpeg'
     if (/\.webp$/i.test(rel)) mime = 'image/webp'
   } else if (/^https?:\/\//.test(cover)) {
@@ -567,6 +640,16 @@ async function coverToDataUrl(item) {
     throw err('封面格式无法识别, 请重新生成封面后重试')
   }
   return `data:${mime};base64,${buf.toString('base64')}`
+}
+
+// 把百炼任务失败的原因翻译成人话: 原始 message 是英文 AND 带内部术语,
+// 直接丢给用户(比如 "Image height or width is too small than 240")等于没说
+function i2vFailMessage(raw) {
+  const m = String(raw || '')
+  if (/too small/i.test(m)) return `首帧图片分辨率太小(宽、高都要 ${I2V_MIN_SIDE} 像素以上), 换一张清晰的照片或重新生成封面`
+  if (/data inspection|inappropriate|sensitive|审核|违规/i.test(m)) return '画面内容没通过审核, 换一张封面或改一下记忆内容再试'
+  if (/timeout|time out|超时/i.test(m)) return '视频生成超时了, 稍后再试一次'
+  return m || '视频生成失败, 请重新生成'
 }
 
 // 下载成品视频转存本地: 保证「生成即永久保存」, 不受第三方 URL 有效期影响
@@ -1224,25 +1307,30 @@ const handlers = {
     // 录音前端限制 60s / 16kHz 单声道, base64 后不会超过 4MB, 这里留出余量
     if (Buffer.from(m[1], 'base64').length > 8 * 1024 * 1024) throw err('录音过长, 请说短一点')
     // qwen3-asr-flash 走 OpenAI 兼容端点, 音频用 dataURL 塞进 input_audio
-    const res = await fetch(`${DASHSCOPE_BASE_URL}/compatible-mode/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${keyDashscope()}`,
-      },
-      body: JSON.stringify({
-        model: 'qwen3-asr-flash',
-        messages: [
-          {
-            role: 'user',
-            content: [{ type: 'input_audio', input_audio: { data: dataUrl } }],
-          },
-        ],
-        stream: false,
-        asr_options: { language: 'zh', enable_itn: true },
-      }),
-      signal: AbortSignal.timeout(30_000),
-    })
+    let res
+    try {
+      res = await fetch(`${DASHSCOPE_BASE_URL}/compatible-mode/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${keyDashscope()}`,
+        },
+        body: JSON.stringify({
+          model: 'qwen3-asr-flash',
+          messages: [
+            {
+              role: 'user',
+              content: [{ type: 'input_audio', input_audio: { data: dataUrl } }],
+            },
+          ],
+          stream: false,
+          asr_options: { language: 'zh', enable_itn: true },
+        }),
+        signal: AbortSignal.timeout(30_000),
+      })
+    } catch (e) {
+      throw err(`连接语音识别服务失败(${e?.cause?.code || e?.name || '网络异常'}), 稍后再试`)
+    }
     const j = await res.json().catch(() => null)
     if (!res.ok || !j) throw err(`语音识别服务异常(${res.status})`)
     const text = j?.choices?.[0]?.message?.content || ''
@@ -1278,21 +1366,31 @@ const handlers = {
     const url = `/uploads/tts/${file}.wav`
     if (fs.existsSync(abs) && fs.statSync(abs).size > 1024) return { url, voice, cached: true }
 
-    const res = await fetch(`${DASHSCOPE_BASE_URL}/api/v1/services/aigc/multimodal-generation/generation`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${keyDashscope()}` },
-      body: JSON.stringify({
-        model: TTS_MODEL,
-        input: { text, voice, language_type: 'Chinese' },
-      }),
-      signal: AbortSignal.timeout(30_000),
-    })
+    let res
+    try {
+      res = await fetch(`${DASHSCOPE_BASE_URL}/api/v1/services/aigc/multimodal-generation/generation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${keyDashscope()}` },
+        body: JSON.stringify({
+          model: TTS_MODEL,
+          input: { text, voice, language_type: 'Chinese' },
+        }),
+        signal: AbortSignal.timeout(30_000),
+      })
+    } catch (e) {
+      throw err(`连接语音合成服务失败(${e?.cause?.code || e?.name || '网络异常'}), 稍后再试`)
+    }
     const j = await res.json().catch(() => null)
     if (!res.ok || !j) throw err(`语音合成服务异常(${res.status})`)
     const src = j?.output?.audio?.url
     if (!src) throw err(j?.message || j?.output?.audio?.data || '语音合成失败，稍后再试')
     // 下载到本地（限制体积，防止异常大文件写满磁盘）
-    const bin = await fetch(src, { signal: AbortSignal.timeout(30_000) })
+    let bin
+    try {
+      bin = await fetch(src, { signal: AbortSignal.timeout(30_000) })
+    } catch (e) {
+      throw err(`语音文件下载失败(${e?.cause?.code || e?.name || '网络异常'}), 稍后再试`)
+    }
     if (!bin.ok) throw err(`语音下载失败(${bin.status})`)
     const buf = Buffer.from(await bin.arrayBuffer())
     if (!buf.length || buf.length > 6 * 1024 * 1024) throw err('语音文件异常，稍后再试')
@@ -3572,8 +3670,11 @@ const handlers = {
   'admin/ai/keys': (p) => {
     mustSuperAdmin(p._uid)
     const keys = Object.keys(AI_KEY_META).map((kind) => {
-      const dbVal = String(aiKeyCache.get(kind) || '').trim()
-      const envVal = String(process.env[AI_KEY_META[kind].env] || '').trim()
+      // 和 aiKey() 用同一套校验: 库里存着中文(历史误填)时不能显示成「已配置 / 来自后台」,
+      // 否则管理员会以为密钥是好的, 而实际每次调用都被跳过
+      const dbRaw = String(aiKeyCache.get(kind) || '').trim()
+      const dbVal = validAiKey(dbRaw)
+      const envVal = validAiKey(process.env[AI_KEY_META[kind].env])
       const active = dbVal || envVal
       return {
         kind,
@@ -3583,6 +3684,8 @@ const handlers = {
         set: !!active,
         // db = 后台设置优先; env = 当前用的是 .env; '' = 还没配
         source: dbVal ? 'db' : envVal ? 'env' : '',
+        // 库里那行非法(中文/带空格)时提示前端: 请重新填写
+        invalid: !!dbRaw && !dbVal,
         masked: maskKey(active),
       }
     })
@@ -3596,6 +3699,9 @@ const handlers = {
     if (!AI_KEY_META[kind]) throw err('未知的密钥类型')
     const val = String(p.value ?? '').trim()
     if (val && /\s/.test(val)) throw err('密钥里不能有空格或换行')
+    if (val && !/^[\x21-\x7E]+$/.test(val)) {
+      throw err('密钥只能包含英文字母、数字和符号, 不能有中文(是不是把说明文字粘进来了?)')
+    }
     if (val && (val.length < 8 || val.length > 400)) throw err('密钥长度看起来不对(8~400 个字符)')
     if (val) {
       db.prepare('INSERT OR REPLACE INTO app_secret (k, v, updated_at) VALUES (?, ?, ?)').run(kind, val, now())
@@ -3673,7 +3779,16 @@ const handlers = {
     // 时长可控制: 只认 5/10 秒, 其它值一律按 5 秒
     const duration = Number(p.duration) === 10 ? 10 : 5
     // 首帧参考优先级: 用户自己上传的照片 > AI 封面
-    const img = (await userPhotoToDataUrl(item.id)) || (await coverToDataUrl(item))
+    const photo = await userPhotoToDataUrl(item.id)
+    let img = photo.dataUrl
+    if (!img) {
+      if (photo.skippedSmall && !String(item.ai_cover || '').trim()) {
+        throw err(
+          `这张记忆里的照片分辨率太小(宽、高都要 ${I2V_MIN_SIDE} 像素以上), 换一张清晰的照片, 或先生成一张 AI 封面`
+        )
+      }
+      img = await coverToDataUrl(item)
+    }
     const title = String(item.title || '').slice(0, 40)
     const content = String(item.content || '').slice(0, 160)
     const prompt = [
@@ -3733,7 +3848,7 @@ const handlers = {
     // 失败/被拒审/取消: 清掉任务号, 允许在配额内重试(此时还没有成品, 不算「生成过」)
     if (['FAILED', 'CANCELED', 'CANCELLED', 'UNKNOWN'].includes(t.status)) {
       db.prepare('UPDATE memory_item SET ai_video_task = ?, updated_at = ? WHERE id = ?').run('', now(), item.id)
-      return { status: 'failed', message: t.message || '视频生成失败, 请重新生成' }
+      return { status: 'failed', message: i2vFailMessage(t.message) }
     }
     return { status: 'running' }
   },
